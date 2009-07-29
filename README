@@ -1,0 +1,37 @@
+# Copyright 2003, 2009 Michael Knox, mike@hfnix.net
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Describe config file for log parse / summary engine
+# Input fields from syslog:
+# Date, time, server, application, facility, ID, message
+#
+# Config line
+# /server regex/, /app regex/, /facility regex/, /msg regex/, $ACTIONS
+# Summaries are required at various levels, from total instances to total sizes to server summaries.
+# ACTIONS:
+# COUNT - Just list the total number of matches
+# SUM[x] - Report the sum of field x of all matches
+# SUM[x], /regex/ - Apply regex to msg field of matches and report the sum of field x from that regex
+# SUM[x], /regex/, {y,z} - Apply regex to msg field of matches and report the sum of field x from that regex for fields y & z
+# AVG[x], /regex/, {y,z} - Apply regex to msg field of matches and report the average of field x from that regex for fields y & z
+# COUNT[x], /regex/, {y,z} - Apply regex to msg field of matches and report the count of field x from that regex for matching fields y & z
+#
+# Report
+# Line {x} - count
+#       {a} - average
+#       {s} - sum
+#       {1} {2} etc - field #'s from the match line in the cmd segement
+#
+# Each entry can test or regex, if text interpret as regex /^string$/

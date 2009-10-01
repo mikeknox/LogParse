@@ -18,31 +18,32 @@
 logparse - syslog analysis tool
 =cut
 
-=head SYNOPSIS
+=head1 SYNOPSIS
+./logparse.pl [-c <configfile> ] [-l <logfile>] [-d <debug level>]
 
-# Describe config file for log parse / summary engine
-# Input fields from syslog:
-# Date, time, server, application, facility, ID, message
-#
-# Config line
-# /server regex/, /app regex/, /facility regex/, /msg regex/, $ACTIONS
-# Summaries are required at various levels, from total instances to total sizes to server summaries.
-#
-# ACTIONS:
-# COUNT - Just list the total number of matches
-# SUM[x] - Report the sum of field x of all matches
-# SUM[x], /regex/ - Apply regex to msg field of matches and report the sum of field x from that regex 
-# SUM[x], /regex/, {y,z} - Apply regex to msg field of matches and report the sum of field x from that regex for fields y & z
-# AVG[x], /regex/, {y,z} - Apply regex to msg field of matches and report the avg of field x from that regex for fields y & z
-# COUNT[x], /regex/, {y,z} - Apply regex to msg field of matches and report the count of field x from that regex for matching fields y & z
-#
-# Each entry can test or regex, if text interpret as regex /^string$/
-# Sample entry...
-# *, /rshd/, *, *, COUNT /connect from (.*)/, {1}
+Describe config file for log parse / summary engine
+ Input fields from syslog:
+  Date, time, server, application, facility, ID, message
 
-# BUGS:
+=head3 Config line
+  /server regex/, /app regex/, /facility regex/, /msg regex/, $ACTIONS
+   Summaries are required at various levels, from total instances to total sizes to server summaries.
 
-# TODO:
+=head2 ACTIONS
+ COUNT - Just list the total number of matches
+ SUM[x] - Report the sum of field x of all matches
+ SUM[x], /regex/ - Apply regex to msg field of matches and report the sum of field x from that regex 
+ SUM[x], /regex/, {y,z} - Apply regex to msg field of matches and report the sum of field x from that regex for fields y & z
+ AVG[x], /regex/, {y,z} - Apply regex to msg field of matches and report the avg of field x from that regex for fields y & z
+ COUNT[x], /regex/, {y,z} - Apply regex to msg field of matches and report the count of field x from that regex for matching fields y & z
+
+ Each entry can test or regex, if text interpret as regex /^string$/
+  Sample entry...
+    *, /rshd/, *, *, COUNT /connect from (.*)/, {1}
+
+=head2 BUGS:
+
+=head2 TODO:
 =cut
 
 # expects data on std in
@@ -96,10 +97,12 @@ while (<CFGFILE>) {
   } elsif (/CMD/) {
     extractregex ("cmd", $arg)  unless $arg =~ /\{/;
   } elsif (/^REGEX/) {
-    extractregex ("cmdregex", $arg);
+    extractregexold ("cmdregex", $arg);
   } elsif (/MATCH/) {
-    extractregex ("cmdmatrix", $arg);
+    extractregexold ("cmdmatrix", $arg);
    $config{$rule}{cmdmatrix} =~ s/\s+//g; # strip all whitespace
+  } elsif (/IGNORE/) {
+   $config{$rule}{cmd} = $cmd;
   } elsif (/COUNT/) {
    $config{$rule}{cmd} = $cmd;
   } elsif (/SUM/) {
@@ -126,13 +129,15 @@ while (<CFGFILE>) {
     print "Error: $cmd didn't match any known commands\n\n";
   }
  }
- #if ($DEBUG >= 5)
- #{
-    logmsg (5, 1,  "rule: $rule");
+    logmsg (5, 1,  "main() rule: $rule");
     for my $key (keys %{ $config{$rule} } ) {
-         logmsg (5, 2, "$key: $config{$rule}{$key}");
+		foreach my $index (@{ $config{$rule}{$key} } ) {
+         	logmsg (5, 2, "main() key=$key");
+    		for my $regkey (keys %{ $index} ) {
+				logmsg (5,3, "main(): $regkey=$$index{$regkey}");
+			}
+		}
     }
- #}
 }
 
 
@@ -140,7 +145,6 @@ open (LOGFILE, "<$SYSLOGFILE") or die "Unable to open $SYSLOGFILE for reading...
 while (<LOGFILE>) {
 	#my $mth; my $date; my $time; my $svr; my $app; my $msg;
 	my $facility;
-#	my $actval = 0;
 	my %line;
 	# Placing line and line componenents into a hash to be passed to actrule, components can then be refered
 	# to in action lines, ie {svr} instead of trying to create regexs to collect individual bits
@@ -149,7 +153,7 @@ while (<LOGFILE>) {
     logmsg (5, 1, "Processing next line");
 	($line{mth}, $line{date}, $line{time}, $line{svr}, $line{app}, $line{msg}) = split (/\s+/, $line{line}, 6);
 	logmsg (9, 2, "mth: $line{mth}, date: $line{date}, time: $line{time}, svr: $line{svr}, app: $line{app}, msg: $line{msg}");
-	#$facility = $1 and $msg = $2 if $msg =~ /\[(.*)\](.*)/;
+
 	if ($line{msg} =~ /^\[/) {
 		($line{facility}, $line{msg}) = split (/\]\s+/, $line{msg}, 2);
 		$line{facility} =~ s/\[//;
@@ -159,16 +163,12 @@ while (<LOGFILE>) {
 	logmsg (9, 1, "facility: $line{facility}");
 	logmsg (9, 1, "msg: $line{msg}");
 
-	# Does svr match
-	# Check others
 	my %matches;
-	matchingrules("appregex", \%matches, $line{app});
+	my %matchregex = ("svrregex", "svr", "appregex", "app", "facregex", "facility", "msgregex", "line");
+	for my $param ("appregex", "facregex", "msgregex", "svrregex") {
+		matchingrules($param, \%matches, $line{ $matchregex{$param} } );
+	}
 	$results{nomatch}[$#{$results{nomatch}}+1] = $line{line} and next unless keys %matches > 0;
-	matchingrules("facregex", \%matches, $line{facility});
-	$results{nomatch}[$#{$results{nomatch}}+1] = $line{line} and next unless keys %matches > 0;
-	matchingrules("msgregex", \%matches, $line{msg});
-	$results{nomatch}[$#{$results{nomatch}}+1] = $line{line} and next unless keys %matches > 0;
-	matchingrules("svrregex", \%matches, $line{svr});
 
     if ($line{msg} =~ /message repeated/ and exists $svrlastline{$line{svr} }{line}{msg} ) { # and keys %{$svrlastline{ $line{svr} }{rulematches}} ) {
         logmsg (9, 2, "last message repeated and matching svr line");
@@ -250,10 +250,12 @@ foreach my $server (keys %svrlastline) {
 report();
 exit 0;
 
-sub extractregex {
+sub extractregexold {
+	# Keep the old behaviour
+
     my $param = shift;
     my $arg = shift;
-    my $paramnegat = $param."negat";
+	my $paramnegat = $param."negate";
 
     logmsg (5, 1, "extractregex(): $param $arg");
     if ($arg =~ /^\!/) {
@@ -270,7 +272,53 @@ sub extractregex {
     $arg =~ s/^{//;
     $arg =~ s/}$//;
     $config{$rule}{$param} = $arg;
-    logmsg (5, 2, "extractregex(): $param = $config{$rule}{$param}");
+	logmsg (5, 2, "extractregex(): $param = $config{$rule}{$param}");
+
+}
+
+sub extractregex {
+	# Put the matches into an array, but would need to change how we handle negates
+	# Currently the negate is assigned to match group (ie facility or host) or rather than 
+	# an indivudal regex, not an issue immediately because we only support 1 regex
+	# Need to assign the negate to the regex
+	# Make the structure ...
+	#	$config{$rule}{$param}[$index] is a hash with {regex} and {negate}
+
+    my $param = shift;
+    my $arg = shift;
+	my $index = @{$config{$rule}{$param}};
+	$index = 0 if $index == "";
+
+	my $regex = \%{$config{$rule}{$param}[$index]};
+
+	$$regex{negate} = 0;
+
+    logmsg (5, 1, "extractregex(): $param $arg");
+    if ($arg =~ /^\!/) {
+        $arg =~ s/^\!//g;
+		$$regex{negate} = 1;
+    }
+
+# strip leading and trailing /'s
+    $arg =~ s/^\///;
+    $arg =~ s/\/$//;
+# strip leading and trailing brace's {}
+    $arg =~ s/^{//;
+    $arg =~ s/}$//;
+	$$regex{regex} = $arg;
+	logmsg (9, 3, "extractregex(): \$regex\{regex\} = $$regex{regex} & \$regex\{negate\} = $$regex{negate}");
+
+	logmsg (5,2, "extractregex(): \$index = $index");
+    logmsg (5, 2, "extractregex(): $param \[$index\]\{regex\} = $config{$rule}{$param}[$index]{regex}");
+    logmsg (5, 2, "extractregex(): $param \[$index\]\{negate\} = $config{$rule}{$param}[$index]{negate}");
+
+	for (my $i=0; $i<=$index; $i++) 
+	{ 
+		logmsg (5,1, "extractregex(): index: $i");
+		foreach my $key (keys %{$config{$rule}{$param}[$i]}) {
+    		logmsg (5, 2, "extractregex(): $param \[$i\]\{$key\} = $config{$rule}{$param}[$i]{$key}");
+		}
+	}
 }
 
 sub report {
@@ -513,6 +561,89 @@ sub actioncmdmatrix
     }
 }
 
+sub defaultregex {
+	# expects a reference to the rule and param
+	my $paramref = shift;
+
+	if (defined $$paramref[0]{regex} ) {
+		logmsg(9, 4, "defaultregex(): Skipping, there are already regex hashes in this rule/param match");
+		logmsg(9, 5, "defaultregex(): regex[0]regex = $$paramref[0]{regex}");
+		logmsg(9, 5, "defaultregex(): regex[0]negate = $$paramref[0]{negate}");
+	} else {
+		logmsg(9, 1, "defaultregex(): There's no regex hash for this rule/param so setting defaults");
+		$$paramref[0]{regex} = "(.*)";
+		$$paramref[0]{negate} = 0 ;
+	}
+}
+
+sub matchregex {
+	# expects a reference to a regex for a given rule & param 
+	# For a given rules regex hash, return true/false for a match
+	my $regex = shift;
+	my $value = shift;
+	my $match = 0;
+
+	if ($value =~ /$$regex{regex}/ or  $$regex{regex} =~ /^\*$/ ) { 
+		#logmsg (5, 4, "Matches rule: $rule");
+		$match = 1;
+	} 
+}
+
+sub matchingrules {
+	my $param = shift;
+	my $matches = shift;
+	my $value = shift;
+
+    logmsg (3, 2, "\nmatchingrules(): param: $param, match count: ".keys(%{$matches})." value: $value");
+
+	if (keys %{$matches} == 0) {
+		# Check all rules as we haevn't had a match yet
+		foreach my $rule (keys %config) {
+			checkrule($param, $matches, $rule, $value);
+		}
+	} else {
+		# As we've allready had a match on the rules, only check those that matched in earlier rounds
+		# key in %matches is the rule that matches
+		foreach my $rule (keys %{$matches}) {
+			checkrule($param, $matches, $rule, $value);
+		}
+	}
+}
+
+sub checkrule {
+	my $param = shift;
+	my $matches = shift;
+	my $rule = shift; # key to %matches
+	my $value = shift;
+
+	logmsg(2, 1, "checkrule(): Checking rule ($rule) & param ($param) for matches against: $value");
+
+	my $paramref = \@{ $config{$rule}{$param} };
+	defaultregex($paramref); # This should be done when reading the config
+
+	foreach my $index (@{ $paramref } ) {
+		my $match  = matchregex($index, $value);
+
+		if ($$index{negate} ) {
+			if ( $match) {
+				delete $$matches{$rule};
+				logmsg (5, 5, "checkrules(): matches $index->{regex} for param \'$param\', but negative rule is set, so removing rule $match from list.");
+             } else {
+				$$matches{$rule} = "match" if $match;
+				logmsg (5, 5, "checkrules(): Doesn't match for $index->{regex} for param \'$param\', but negative rule is set, so leaving rule $match on list.");
+             }
+		} elsif ($match) {
+			$$matches{$rule} = "match" if $match;
+			logmsg (5, 4, "checkrules(): matches $index->{regex} for param \'$param\', leaving rule $match on list.");
+		} else {
+			delete $$matches{$rule};
+			logmsg (5, 4, "checkrules(): doesn't match $index->{regex} for param \'$param\', removing rule $match from list.");
+        }
+	} # for each regex hash in the array
+	logmsg (3, 2, "checkrules(): matches ".keys (%{$matches})." matches after checking rules for $param");
+}
+
+=oldcode
 sub matchingrules {
 	my $param = shift;
 	my $matches = shift;
@@ -520,6 +651,7 @@ sub matchingrules {
 
     logmsg (3, 2, "matchingrules(): param: $param, matches: $matches, value: $value");
 	if (keys %{$matches} == 0) {
+		# Check all rules as we haevn't had a match yet
 		foreach my $rule (keys %config) {
 			$config{$rule}{$param} = "(.*)" unless exists ($config{$rule}{$param});
 			logmsg (5, 3, "Does $value match /$config{$rule}{$param}/ ??");
@@ -529,6 +661,7 @@ sub matchingrules {
 			}
 		}
 	} else {
+		# As we've allready had a match on the rules, only check those that matched in earlier rounds
 		foreach my $match (keys %{$matches}) {
 			if (exists ($config{$match}{$param}) ) {
 				logmsg (5, 4, "Does value: \"$value\" match \'$config{$match}{$param}\' for param $param ??");
@@ -556,6 +689,7 @@ sub matchingrules {
 	}
 	logmsg (3, 2, keys (%{$matches})." matches after checking rules for $param");
 }
+=cut
 
 sub logmsg {
     my $level = shift;

@@ -80,11 +80,11 @@ FORMAT <name> {
 use strict;
 use Getopt::Std;
 #no strict 'refs';
-use Data::Dump qw(pp);
-use Data::Dumper;
+#use Data::Dump qw(pp);
+use Data::Dumper qw(Dumper);
 
-use utils;
-use logparse;
+#use utils;
+#use logparse;
 
 # Globals
 my %profile;
@@ -113,14 +113,13 @@ report(\%cfghash, \%reshash);
 profilereport();
 exit 0;
 
-
 sub processlogfile {
 	my $cfghashref = shift;
 	my $reshashref = shift;
 	my $logfile = shift;
 
-	profile( whoami, whowasi );
 	logmsg (1, 0, "processing $logfile ...");
+	logmsg(5, 1, " and I was called by ... ".&whowasi);
 	open (LOGFILE, "<$logfile") or die "Unable to open $SYSLOGFILE for reading...";
 	while (<LOGFILE>) {
 		my $facility;
@@ -150,7 +149,7 @@ sub processlogfile {
 		logmsg(9, 2, keys(%matches)." matches so far");
 		$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} and next unless keys %matches > 0;
 		logmsg(9,1,"Results hash ...");
-		pp(%$reshashref);
+		Dumper(%$reshashref);
 	
     	if ($line{msg} =~ /message repeated/ and exists $svrlastline{$line{svr} }{line}{msg} ) { # and keys %{$svrlastline{ $line{svr} }{rulematches}} ) {
         	logmsg (9, 2, "last message repeated and matching svr line");
@@ -192,7 +191,7 @@ sub processlogfile {
 		    	$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} if $actrule == 0;
             	%{$svrlastline{$line{svr} }{rulematches}} = %matches unless ($line{msg} =~ /last message repeated d+ times/);
 
-            	logmsg (5, 2, "setting lastline match for server: $line{svr} and line:n$line{line}");
+            	logmsg (5, 2, "setting lastline match for server: $line{svr} and line:\n$line{line}");
 				logmsg (5, 3, "added matches for $line{svr} for rules:");
 				for my $key (keys %{$svrlastline{$line{svr} }{rulematches}}) {
 		        	logmsg (5, 4, "$key");
@@ -231,22 +230,27 @@ sub processlogfile {
 sub parsecfgline {
 	my $line = shift;
 
-	profile( whoami(), whowasi() );
-	logmsg (5, 0, " and I was called by ... ".whowasi);
-	my $cmd; my $arg;
+	#profile( whoami(), whowasi() );
+	logmsg (5, 3, " and I was called by ... ".&whowasi);
+	my $cmd = "";
+	my $arg = "";
 	chomp $line;
 
-	logmsg (6, 4, "line: $line");
+	logmsg(5, 3, " and I was called by ... ".&whowasi);
+	logmsg (6, 4, "line: ${line}");
 
-	unless ($line =~ /^#|\s+#/ ) {
+	if ($line =~ /^#|\s+#/ ) {
+		logmsg(9, 4, "comment line, skipping, therefore returns are empty strings");
+	} elsif ($line =~ /^\s+$/ or $line =~ /^$/ ){
+		logmsg(9, 4, "empty line, skipping, therefore returns are empty strings");
+	} else {
 		$line = $1 if $line =~ /^\s+(.*)/;
 		($cmd, $arg) = split (/\s+/, $line, 2);
-	} else {
-		logmsg(9, 5, "comment line, skipping");
+		$arg = "" unless $arg;
+		$cmd = "" unless $cmd;	
 	}
-
-    logmsg (6, 4, "returning cmd: $cmd arg: $arg");
-
+	
+	logmsg (6, 3, "returning cmd: $cmd arg: $arg");
 	return ($cmd, $arg);
 }
 
@@ -255,15 +259,14 @@ sub loadcfg {
 	my $cfgfile = shift;
 	my $cmdcount = shift;
 
-	profile( whoami(), whowasi() );
-	logmsg (5, 0, " and I was called by ... ".whowasi);
 	open (CFGFILE, "<$cfgfile");
 
 	logmsg(1, 0, "Loading cfg from $cfgfile");
-
-	my $rule;
-	my $bracecount;
-	my $stanzatype;
+	logmsg(5, 3, " and I was called by ... ".&whowasi);
+	
+	my $rule = -1;
+	my $bracecount = 0;
+	my $stanzatype = "";
 
 	while (<CFGFILE>) {
 		my $line = $_;
@@ -275,6 +278,8 @@ sub loadcfg {
 		my $cmd; my $arg;
 		($cmd, $arg) = parsecfgline($line);
 		next unless $cmd;
+		logmsg(6, 2, "rule:$rule");
+		logmsg(6, 2, "cmdcount:$cmdcount");
 		logmsg (6, 2, "cmd:$cmd arg:$arg rule:$rule cmdcount:$cmdcount");
 
 		if ($bracecount == 0 ) {
@@ -313,9 +318,10 @@ sub loadcfg {
 			for ($stanzatype) {
 				if (/rule/) {
 					logmsg (6, 2, "About to call processrule ... cmd:$cmd arg:$arg rule:$rule cmdcount:$cmdcount");
-					processrule( %{ $$cfghashref{rules}{$rule} }, $rule, $cmd, $arg);
+					processrule( \%{ $$cfghashref{rules}{$rule} }, $rule, $cmd, $arg);
 				} elsif (/format/) {
-					processformat( %{ $$cfghashref{formats}{$rule} } , $rule, $cmd, $arg);
+					logmsg (6, 2, "About to call processformat ... cmd:$cmd arg:$arg rule:$rule cmdcount:$cmdcount");
+					processformat( \%{$$cfghashref{formats}{$rule}} , $rule, $cmd, $arg);
 				} # if stanzatype
 			} #if stanzatype
 		} else {# else bracecount
@@ -324,7 +330,7 @@ sub loadcfg {
 	} # while
 	close CFGFILE;
 	logmsg (5, 1, "Config Hash contents:");
-	&pp( %$cfghashref );
+	&Dumper( %$cfghashref );
 	logmsg (1, 0, "finished processing cfg: $cfgfile");
 } # sub loadcfg
 
@@ -334,20 +340,21 @@ sub processformat {
 	my $cmd = shift;
 	my $arg = shift;
 
-	profile( whoami(), whowasi() );
-	logmsg (5, 0, " and I was called by ... ".whowasi);
+	#profile( whoami(), whowasi() );
+	logmsg (5, 4, " and I was called by ... ".&whowasi);
 	logmsg (5, 4, "Processing rule: $rule");
-		logmsg(9, 5, "extracted cmd: $cmd and arg:$arg");
-		next unless $cmd;
+	logmsg(9, 5, "passed cmd: $cmd");
+	logmsg(9, 5, "passed arg: $arg");
+	next unless $cmd;
 
 		for ($cmd) {
 			if (/DELIMITER/) {
 				$$cfghashref{delimiter} = $arg;
 				logmsg (5, 1, "Config Hash contents:");
-				&pp( %$cfghashref );
+				&Dumper( %$cfghashref );
 			} elsif (/FIELDS/) {
 				$$cfghashref{fields} = $arg;
-			} elsif (/FIELD(d)/) {
+			} elsif (/FIELD(\d+)/) {
 				logmsg(6, 6, "FIELD#: $1 arg:$arg");
   			} elsif (/^\}$/) {
   			} elsif (/^\{$/) {
@@ -364,8 +371,8 @@ sub processrule {
 	my $cmd = shift;
 	my $arg = shift;
 
-	profile( whoami(), whowasi() );
-	logmsg (5, 4, " and I was called by ... ".whowasi);
+	#profile( whoami(), whowasi() );
+	logmsg (5, 4, " and I was called by ... ".&whowasi);
 	logmsg (5, 4, "Processing $rule with cmd: $cmd and arg: $arg");
 
 	next unless $cmd;
@@ -418,7 +425,7 @@ sub processrule {
 	} # for
     logmsg (5, 1,  "Finished processing rule: $rule");
 	logmsg (9, 1, "Config hash after running processrule");
-	&pp(%$cfghashref);
+	Dumper(%$cfghashref);
 } # sub processrule
 
 sub extractregexold {
@@ -428,8 +435,8 @@ sub extractregexold {
     my $arg = shift;
 	my $rule = shift;
 
-	profile( whoami(), whowasi() );
-	logmsg (5, 0, " and I was called by ... ".whowasi);
+#	profile( whoami(), whowasi() );
+	logmsg (5, 3, " and I was called by ... ".&whowasi);
 	my $paramnegat = $param."negate";
 
     logmsg (5, 1, "rule: $rule param: $param arg: $arg");
@@ -465,8 +472,8 @@ sub extractregex {
 
 	my $index = 0;
 
-	profile( whoami(), whowasi() );
-	logmsg (5, 0, " and I was called by ... ".whowasi);
+#	profile( whoami(), whowasi() );
+	logmsg (5, 3, " and I was called by ... ".&whowasi);
 	logmsg (1, 3, " rule: $rule for param $param with arg $arg ");
 	if (exists $$cfghashref{$param}[0] ) {
 		$index = @{$$cfghashref{$param}};
@@ -474,7 +481,7 @@ sub extractregex {
 		$$cfghashref{$param} = ();
 	}
 
-	my $regex = %{$$cfghashref{$param}[$index]};
+	my $regex = \%{$$cfghashref{$param}[$index]};
 
 	$$regex{negate} = 0;
 
@@ -494,14 +501,14 @@ sub extractregex {
 	logmsg (9, 3, "$regex\{regex\} = $$regex{regex} & \$regex\{negate\} = $$regex{negate}");
 
 	logmsg (5,2, "$index = $index");
-    logmsg (5, 2, "$param [$index\]\{regex\} = $$cfghashref{$param}[$index]{regex}");
-    logmsg (5, 2, "$param [$index\]\{negate\} = $$cfghashref{$param}[$index]{negate}");
+    logmsg (5, 2, "$param \[$index\]\{regex\} = $$cfghashref{$param}[$index]{regex}");
+    logmsg (5, 2, "$param \[$index\]\{negate\} = $$cfghashref{$param}[$index]{negate}");
 
 	for (my $i=0; $i<=$index; $i++) 
 	{ 
 		logmsg (5,1, "index: $i");
 		foreach my $key (keys %{$$cfghashref{$param}[$i]}) {
-    		logmsg (5, 2, "$param [$i\]\{$key\} = $$cfghashref{$param}[$i]{$key}");
+    		logmsg (5, 2, "$param \[$i\]\{$key\} = $$cfghashref{$param}[$i]{$key}");
 		}
 	}
 }
@@ -512,33 +519,33 @@ sub report {
 	my $rpthashref = shift;
 
 	logmsg(1, 0, "Ruuning report");
-	profile( whoami(), whowasi() );
-	logmsg (5, 0, " and I was called by ... ".whowasi);
+#	profile( whoami(), whowasi() );
+	logmsg (5, 0, " and I was called by ... ".&whowasi);
 
 	logmsg(5, 1, "Dump of results hash ...");
-	pp(%$reshashref) if $DEBUG >= 5;
+	Dumper(%$reshashref) if $DEBUG >= 5;
 
-	print "n\nNo match for lines:\n";
-	foreach my $line (@{@$rpthashref{nomatch}}) {
-		print "t$line";
+	print "\n\nNo match for lines:\n";
+	foreach my $line (@{@$reshashref{nomatch}}) {
+		print "\t$line";
 	}
-	print "n\nSummaries:\n";
-	for my $rule (sort keys %$rpthashref)  {
+	print "\n\nSummaries:\n";
+	for my $rule (sort keys %$reshashref)  {
 		next if $rule =~ /nomatch/;
 		if (exists ($$cfghashref{rules}{$rule}{rpttitle})) {
-			print "$$cfghashref{rules}{$rule}{rpttitle}:n";
+			print "$$cfghashref{rules}{$rule}{rpttitle}\n";
 		} else {
-			logmsg (4, 2, "Rule: $rule:");
+			logmsg (4, 2, "Rule: $rule");
 		}
 
-		for my $key (keys %{$$rpthashref{$rule}} )  {
+		for my $key (keys %{$$reshashref{$rule}} )  {
 			if (exists ($$cfghashref{rules}{$rule}{rptline})) {
-				print "t".rptline($cfghashref, $reshashref, $rpthashref, $rule, $key)."\n";
+				print "\t".rptline($cfghashref, $reshashref, $rpthashref, $rule, $key)."\n";
 			} else {
-				print "t$$rpthashref{$rule}{$key}: $key\n";
+				print "\t$$rpthashref{$rule}{$key}: $key\n";
 			}
 		}
-		print "n";
+		print "\n";
 	}
 }
 
@@ -553,13 +560,14 @@ sub rptline {
 	# generate rpt line based on config spec for line and results.
 	# Sample entry: {x}: logouts from {2} by {1}
 
-	profile( whoami(), whowasi() );
-	logmsg (5, 0, " and I was called by ... ".whowasi);
+#	profile( whoami(), whowasi() );
+	logmsg (5, 2, " and I was called by ... ".&whowasi);
     logmsg (3, 2, "Starting with rule:$rule");
     logmsg (9, 3, "key: $key");
 	my @fields = split /:/, $key;
 
     logmsg (9, 3, "line: $line");
+    logmsg(9, 3, "subsituting {x} with $$rpthashref{$rule}{$key}{count}");
 	$line =~ s/\{x\}/$$rpthashref{$rule}{$key}{count}/;
     
     if ($$cfghashref{rules}{$rule}{cmd} eq "SUM") {
@@ -575,8 +583,8 @@ sub rptline {
 	for my $i (0..$#fields) {
 		my $field = $i+1;
         logmsg (9, 4, "$fields[$field] = $fields[$i]");
-		if ($line =~ /{$field\}/) {
-			$line =~ s/{$field\}/$fields[$i]/;
+		if ($line =~ /\{$field\}/) {
+			$line =~ s/\{$field\}/$fields[$i]/;
 		}
 	}
 	return $line;
@@ -592,8 +600,8 @@ sub actionrule {
 	my $value;
 	my $retval = 0; my $resultsrule;
 
-	profile( whoami(), whowasi() );
-	logmsg (5, 0, " and I was called by ... ".whowasi);
+#	profile( whoami(), whowasi() );
+	logmsg (5, 0, " and I was called by ... ".&whowasi);
     logmsg (9, 2, "rule: $rule");
 
 	if (exists ($$cfghashref{rules}{$rule}{appendrule})) {
@@ -646,7 +654,8 @@ sub actionrulecmd
 	my $line = shift; # hash passed by ref, DO NOT mod
     my $rule = shift;
     my $resultsrule = shift;
-	profile( whoami(), whowasi() );
+#3	profile( whoami(), whowasi() );
+	logmsg (5, 3, " and I was called by ... ".&whowasi);
     logmsg (2, 2, "actioning rule $rule for line: $$line{line}");
 
 	# This sub contains the first half of the black magic
@@ -685,24 +694,24 @@ sub actionrulecmd
 
    if (not exists ($$cfghashref{rules}{$rule}{cmdregex}) ) {
         logmsg (5, 3, "No cmd regex, calling actioncmdmatrix");
-        actioncmdmatrix($cfghashref, $reshashref, $line, $rule, $resultsrule, @matrix);
+        actioncmdmatrix($cfghashref, $reshashref, $line, $rule, $resultsrule, \@matrix);
     } elsif ($$cfghashref{rules}{$rule}{cmdregexnegat} ) {
         if ($$cfghashref{rules}{$rule}{cmdregex} and $$line{msg} and $$line{msg}  !~ /$$cfghashref{rules}{$rule}{cmdregex}/ ) {
             logmsg (5, 3, "Negative match, calling actioncmdmatrix");
-            actioncmdmatrix($cfghashref, $reshashref, $line, $rule, $resultsrule, @matrix);
+            actioncmdmatrix($cfghashref, $reshashref, $line, $rule, $resultsrule, \@matrix);
         }
     } else {
         if ($$cfghashref{rules}{$rule}{cmdregex} and $$line{msg} and $$line{msg}  =~ /$$cfghashref{rules}{$rule}{cmdregex}/ ) {
             logmsg (5, 3, "Positive match, calling actioncmdmatrixnline hash:");
-			&pp($line) if $DEBUG >= 5;
-            actioncmdmatrix($cfghashref, $reshashref, $line, $rule, $resultsrule, @matrix);
+			print Dumper($line) if $DEBUG >= 5;
+            actioncmdmatrix($cfghashref, $reshashref, $line, $rule, $resultsrule, \@matrix);
 		} 
     } 
 }
 
 sub printhash
 {
-	profile( whoami(), whowasi() );
+#	profile( whoami(), whowasi() );
 	my $line = shift; # hash passed by ref, DO NOT mod
     foreach my $key (keys %{ $line} )
     {
@@ -720,7 +729,11 @@ sub actioncmdmatrix
     my $resultsrule = shift; # Name or ID of rule which contains the result set to be updated
 	my $matrixref = shift; # arrayref
 
-	profile( whoami(), whowasi() );
+	logmsg(5, 4, " ... actioning resultsrule = $rule");
+	logmsg(5, 5, " and I was called by ... ".&whowasi);
+	logmsg(9, 5, "Line hash ...");
+	print Dumper(%$line);
+	#profile( whoami(), whowasi() );
 	my $cmdmatrix = $$cfghashref{rules}{$rule}{cmdmatrix};
 	#my @matrix = shift; #split (/,/, $cmdmatrix);
 
@@ -731,12 +744,11 @@ sub actioncmdmatrix
 	if ( exists ($$cfghashref{rules}{$rule}{cmdfield}) ) {
 		$cmdfield = ${$$cfghashref{rules}{$rule}{cmdfield}};
 	}
-
-    logmsg(5, 2, " ... actioning resultsrule = $rule");
     
 	if ( exists $$cfghashref{rules}{$rule}{cmdmatrix}) {
-	    logmsg (5, 3, "Collecting data for matrix $$cfghashref{rules}{$rule}{cmdmatrix}");
-	    logmsg (5, 3, "Using matrix @$matrixref");
+	    logmsg (5, 5, "Collecting data for matrix $$cfghashref{rules}{$rule}{cmdmatrix}");
+	    print Dumper(@$matrixref);
+	    logmsg (5, 5, "Using matrix @$matrixref");
 
 		# this is where "strict refs" breaks things
 		# sample: @matrix = svr,1,4,5
@@ -752,7 +764,7 @@ sub actioncmdmatrix
             # and hence contains the various matches from the previous regex match
             # which occured just before this function was called
 
-		    logmsg (9, 4, "matrix field $field has value ${$field}");
+		    logmsg (9, 5, "matrix field $field has value ${$field}");
 			if (exists $$line{$field}) {
 				if ($fieldhash) {
 					$fieldhash = "$fieldhash:$$line{$field}";
@@ -766,9 +778,9 @@ sub actioncmdmatrix
 				    if ( ${$field} ) {
 						$fieldhash = "${$field}";
 					} else {
-						logmsg (1, 4, "$field not found in \"$$line{line}\" with regex $$cfghashref{rules}{$rule}{cmdregex}");
-						logmsg (1, 4, "line hash:");
-                        printhash($line) if $DEBUG >= 1;
+						logmsg (1, 6, "$field not found in \"$$line{line}\" with regex $$cfghashref{rules}{$rule}{cmdregex}");
+						logmsg (1, 6, "line hash:");
+                        print Dumper(%$line) if $DEBUG >= 1;
 					}
 				}
 			}
@@ -776,42 +788,43 @@ sub actioncmdmatrix
 
 		use strict 'refs';
         if ($$cfghashref{rules}{$rule}{targetfield}) {
-			logmsg (1, 4, "Setting cmdfield (field $$cfghashref{rules}{$rule}{targetfield}) to ${$$cfghashref{rules}{$rule}{targetfield}}");
+			logmsg (1, 5, "Setting cmdfield (field $$cfghashref{rules}{$rule}{targetfield}) to ${$$cfghashref{rules}{$rule}{targetfield}}");
             $cmdfield = ${$$cfghashref{rules}{$rule}{targetfield}};
         }
 		#if ($$cfghashref{rules}{$rule}{cmd} and $$cfghashref{rules}{$rule}{cmd} =~ /^COUNT$/) { 
 	    $$reshashref{$resultsrule}{$fieldhash}{count}++;
-		logmsg (5, 4, "$$reshashref{$resultsrule}{$fieldhash}{count} matches for rule $rule so far from $fieldhash");
+		logmsg (5, 5, "$$reshashref{$resultsrule}{$fieldhash}{count} matches for rule $rule so far from $fieldhash");
 		#} els
         if ($$cfghashref{rules}{$rule}{cmd} eq "SUM" or $$cfghashref{rules}{$rule}{cmd} eq "AVG") { 
 			$$reshashref{$resultsrule}{$fieldhash}{sum} = $$reshashref{$resultsrule}{$fieldhash}{sum} + $cmdfield;
-			logmsg (5, 4, "Adding $cmdfield to total (now $$reshashref{$resultsrule}{$fieldhash}{sum}) for rule $rule so far from $fieldhash");
+			logmsg (5, 5, "Adding $cmdfield to total (now $$reshashref{$resultsrule}{$fieldhash}{sum}) for rule $rule so far from $fieldhash");
             if ($$cfghashref{rules}{$rule}{cmd} eq "AVG") {
-			    logmsg (5, 4, "Average is ".$$reshashref{$resultsrule}{$fieldhash}{sum} / $$reshashref{$resultsrule}{$fieldhash}{count}." for rule $rule so far from $fieldhash");
+			    logmsg (5, 5, "Average is ".$$reshashref{$resultsrule}{$fieldhash}{sum} / $$reshashref{$resultsrule}{$fieldhash}{count}." for rule $rule so far from $fieldhash");
             }
 		}	
 		for my $key (keys %{$$reshashref{$resultsrule}})  {
-			logmsg (5, 3, "key $key for rule:$rule with $$reshashref{$resultsrule}{$key}{count} matches");
+			logmsg (5, 5, "key $key for rule:$rule with $$reshashref{$resultsrule}{$key}{count} matches");
 		}
-		logmsg (5, 2, "$fieldhash matches for rule $rule so far from matrix: $$cfghashref{rules}{$rule}{cmdmatrix}");
+		logmsg (5, 5, "$fieldhash matches for rule $rule so far from matrix: $$cfghashref{rules}{$rule}{cmdmatrix}");
 	} else {
-		logmsg (5, 2, "cmdmatrix is not set for $rule");
+		logmsg (5, 5, "cmdmatrix is not set for $rule");
 	    #if ($$cfghashref{rules}{$rule}{cmd} and $$cfghashref{rules}{$rule}{cmd} =~ /^COUNT$/) { 
 			$$reshashref{$resultsrule}{count}++;
-			logmsg (5, 3, "$$reshashref{$resultsrule}{count} lines match rule $rule so far");
+			logmsg (5, 5, "$$reshashref{$resultsrule}{count} lines match rule $rule so far");
 	#	} els
         if ($$cfghashref{rules}{$rule}{cmd} eq "SUM" or $$cfghashref{rules}{$rule}{cmd} eq "AVG") { 
 			$$reshashref{$resultsrule}{sum} = $$reshashref{$resultsrule}{sum} + $cmdfield;
-			logmsg (5, 3, "$$reshashref{$resultsrule}{sum} lines match rule $rule so far");
+			logmsg (5, 5, "$$reshashref{$resultsrule}{sum} lines match rule $rule so far");
 		}
     }
+    logmsg(5, 4, " ... Finished actioning resultsrule = $rule");
 }
 
 sub defaultregex {
 	# expects a reference to the rule and param
 	my $paramref = shift;
-
-	profile( whoami(), whowasi() );
+	logmsg(5, 4, " and I was called by ... ".&whowasi);
+#	profile( whoami(), whowasi() );
 	if (defined $$paramref[0]{regex} ) {
 		logmsg(9, 4, "Skipping, there are already regex hashes in this rule/param match");
 		logmsg(9, 5, "regex[0]regex = $$paramref[0]{regex}");
@@ -829,9 +842,9 @@ sub matchregex {
 	my $regex = shift;
 	my $value = shift;
 	my $match = 0;
-
-	profile( whoami(), whowasi() );
-	if ($value =~ /$$regex{regex}/ or  $$regex{regex} =~ /^*$/ ) { 
+	logmsg(5, 3, " and I was called by ... ".&whowasi);
+#	profile( whoami(), whowasi() );
+	if ($value =~ /$$regex{regex}/ or  $$regex{regex} =~ /^\*$/ ) { 
 		logmsg (9, 4, "value ($value) matches regex /$$regex{regex}/");
 		$match = 1;
 	} else {
@@ -845,11 +858,10 @@ sub matchingrules {
 	my $matchref = shift;
 	my $value = shift;
 
-	profile( whoami(), whowasi() );
-
-	logmsg (6, 3, "param:$param	");
-	logmsg (6,3, "value:$value");
-    logmsg (3, 2, " $param, match count: ".keys(%{$matchref})." value: $value");
+	logmsg(5, 3, " and I was called by ... ".&whowasi);
+	logmsg (6, 3, "param:$param");
+	logmsg (6, 3, "value:$value");
+    logmsg (3, 2, "$param, match count: ".keys(%{$matchref})." value: $value");
 
 	if (keys %{$matchref} == 0) {
 		# Check all rules as we haevn't had a match yet
@@ -872,9 +884,8 @@ sub checkrule {
 	my $rule = shift; # key to %matches
 	my $value = shift;
 
-	profile( whoami(), whowasi() );
 	logmsg(2, 1, "Checking rule ($rule) & param ($param) for matches against: $value");
-
+	logmsg(5, 3, " and I was called by ... ".&whowasi);
 	my $paramref = \@{ $$cfghashref{rules}{$rule}{$param} };
 	defaultregex($paramref); # This should be done when reading the config
 
@@ -884,82 +895,30 @@ sub checkrule {
 		if ($$index{negate} ) {
 			if ( $match) {
 				delete $$matches{$rule};
-				logmsg (5, 5, "matches $index->{regex} for param '$param\', but negative rule is set, so removing rule $match from list.");
+				logmsg (5, 5, "matches $index->{regex} for param \'$param\', but negative rule is set, so removing rule $match from list.");
              } else {
 				$$matches{$rule} = "match" if $match;
-				logmsg (5, 5, "Doesn't match for $index->{regex} for param '$param\', but negative rule is set, so leaving rule $match on list.");
+				logmsg (5, 5, "Doesn't match for $index->{regex} for param \'$param\', but negative rule is set, so leaving rule $match on list.");
              }
 		} elsif ($match) {
 			$$matches{$rule} = "match" if $match;
-			logmsg (5, 4, "matches $index->{regex} for param '$param\', leaving rule $match on list.");
+			logmsg (5, 4, "matches $index->{regex} for param \'$param\', leaving rule $match on list.");
 		} else {
 			delete $$matches{$rule};
-			logmsg (5, 4, "doesn't match $index->{regex} for param '$param\', removing rule $match from list.");
+			logmsg (5, 4, "doesn't match $index->{regex} for param \'$param\', removing rule $match from list.");
         }
 	} # for each regex hash in the array
 	logmsg (3, 2, "matches ".keys (%{$matches})." matches after checking rules for $param");
 }
 
-=oldcode
-sub matchingrules {
-	my $cfghashref = shift;
-	my $param = shift;
-	my $matches = shift;
-	my $value = shift;
-
-	profile( whoami(), whowasi() );
-    logmsg (3, 2, "param: $param, matches: $matches, value: $value");
-	if (keys %{$matches} == 0) {
-		# Check all rules as we haevn't had a match yet
-		foreach my $rule (keys %config) {
-			$$cfghashref{rules}{$rule}{$param} = "(.*)" unless exists ($$cfghashref{rules}{$rule}{$param});
-			logmsg (5, 3, "Does $value match /$$cfghashref{rules}{$rule}{$param}/ ??");
-			if ($value =~ /$$cfghashref{rules}{$rule}{$param}/ or  $$cfghashref{rules}{$rule}{$param} =~ /^*$/ ) { 
-				logmsg (5, 4, "Matches rule: $rule");
-				$$matches{$rule} = "match";
-			}
-		}
-	} else {
-		# As we've allready had a match on the rules, only check those that matched in earlier rounds
-		foreach my $match (keys %{$matches}) {
-			if (exists ($$cfghashref{rules}{$match}{$param}) ) {
-				logmsg (5, 4, "Does value: "$value\" match \'$$cfghashref{rules}{$match}{$param}\' for param $param ??");
-                if ($$cfghashref{rules}{$match}{"${param}negat"}) {
-                    logmsg (5, 5, "Doing a negative match");
-                }
-			} else {
-				logmsg (5, 3, "No rule for value: "$value\" in rule $match, leaving on match list.");
-				$$cfghashref{rules}{$match}{$param} = "(.*)";
-			}
-            if ($$cfghashref{rules}{$match}{"${param}negat"}) {
-                if ($value =~ /$$cfghashref{rules}{$match}{$param}/ or  $$cfghashref{rules}{$match}{$param} =~ /^*$/ ) { 
-				    delete $$matches{$match};
-				    logmsg (5, 5, "matches $$cfghashref{rules}{$match}{$param} for param '$param\', but negative rule is set, so removing rule $match from list.");
-                } else {
-				    logmsg (5, 5, "Doesn't match for $$cfghashref{rules}{$match}{$param} for param '$param\', but negative rule is set, so leaving rule $match on list.");
-                }
-            } elsif ($value =~ /$$cfghashref{rules}{$match}{$param}/ or  $$cfghashref{rules}{$match}{$param} =~ /^*$/ ) { 
-				logmsg (5, 4, "matches $$cfghashref{rules}{$match}{$param} for param '$param\', leaving rule $match on list.");
-			} else {
-				delete $$matches{$match};
-				logmsg (5, 4, "doesn't match $$cfghashref{rules}{$match}{$param} for param '$param\', removing rule $match from list.");
-            }
-		}
-	}
-	logmsg (3, 2, keys (%{$matches})." matches after checking rules for $param");
-}
-=cut
-
-
-sub whoami  { ( caller(1) )[3] }
-sub whowasi { ( caller(2) )[3] }
+sub whoami  { (caller(1) )[3] }
+sub whowasi { (caller(2) )[3] }
 
 sub logmsg {
     my $level = shift;
     my $indent = shift;
     my $msg = shift;
 
-print "$DEBUG";
     if ($DEBUG >= $level) {
         for my $i (0..$indent) {
             print STDERR "  ";
@@ -972,11 +931,11 @@ sub profile {
 	my $caller = shift;
 	my $parent = shift;
 
-	$profile{$parent}{$caller}++;
+#	$profile{$parent}{$caller}++;
 	
 }
 
 sub profilereport {
-	pp(%profile);
+	print Dumper(%profile);
 }
 

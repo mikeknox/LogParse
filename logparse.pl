@@ -105,12 +105,11 @@ $CONFIGFILE = $opts{c} if $opts{c};
 $SYSLOGFILE = $opts{l} if $opts{l};
 
 loadcfg (\%cfghash, $CONFIGFILE, $cmdcount);
+print Dumper(%cfghash);
+#processlogfile(\%cfghash, \%reshash, $SYSLOGFILE);
+#report(\%cfghash, \%reshash);
+#profilereport();
 
-processlogfile(\%cfghash, \%reshash, $SYSLOGFILE);
-
-report(\%cfghash, \%reshash);
-
-profilereport();
 exit 0;
 
 sub processlogfile {
@@ -118,32 +117,33 @@ sub processlogfile {
 	my $reshashref = shift;
 	my $logfile = shift;
 
-	logmsg (1, 0, "processing $logfile ...");
+	logmsg(1, 0, "processing $logfile ...");
 	logmsg(5, 1, " and I was called by ... ".&whowasi);
 	open (LOGFILE, "<$logfile") or die "Unable to open $SYSLOGFILE for reading...";
 	while (<LOGFILE>) {
-		my $facility;
+		my $facility = "";
 		my %line;
 		# Placing line and line componenents into a hash to be passed to actrule, components can then be refered
 		# to in action lines, ie {svr} instead of trying to create regexs to collect individual bits
 		$line{line} = $_;
 
-    	logmsg (5, 1, "Processing next line");
+    	logmsg(5, 1, "Processing next line");
 		($line{mth}, $line{date}, $line{time}, $line{svr}, $line{app}, $line{msg}) = split (/\s+/, $line{line}, 6);
-		logmsg (9, 2, "mth: $line{mth}, date: $line{date}, time: $line{time}, svr: $line{svr}, app: $line{app}, msg: $line{msg}");
-
+		logmsg(9, 2, "mth: $line{mth}, date: $line{date}, time: $line{time}, svr: $line{svr}, app: $line{app}, msg: $line{msg}");
+		logmsg(9, 1, "Checking line: $line{line}");
+		logmsg(9, 1, "msg: $line{msg}");
+		
 		if ($line{msg} =~ /^\[/) {
 			($line{facility}, $line{msg}) = split (/]\s+/, $line{msg}, 2);
 			$line{facility} =~ s/\[//;
+			logmsg(9, 1, "facility: $line{facility}");
 		}
 	
-		logmsg (9, 1, "Checking line: $line{line}");
-		logmsg (9, 1, "facility: $line{facility}");
-		logmsg (9, 1, "msg: $line{msg}");
-
+# These need to be abstracted out per description in the FORMAT stanza	
 		my %matches;
 		my %matchregex = ("svrregex", "svr", "appregex", "app", "facregex", "facility", "msgregex", "line");
 		for my $param ("appregex", "facregex", "msgregex", "svrregex") {
+			$line{ $matchregex{$param} } = "" unless $line{ $matchregex{$param} }; # this really should be elsewhere, it's a hack
 			matchingrules($cfghashref, $param, \%matches, $line{ $matchregex{$param} } );
 		}
 		logmsg(9, 2, keys(%matches)." matches so far");
@@ -280,19 +280,23 @@ sub loadcfg {
 		next unless $cmd;
 		logmsg(6, 2, "rule:$rule");
 		logmsg(6, 2, "cmdcount:$cmdcount");
-		logmsg (6, 2, "cmd:$cmd arg:$arg rule:$rule cmdcount:$cmdcount");
+		logmsg(6, 2, "cmd:$cmd arg:$arg rule:$rule cmdcount:$cmdcount");
 
 		if ($bracecount == 0 ) {
  			for ($cmd) {
   				if (/RULE/) {
    					if ($arg =~ /(.*)\s+\{/) {
     					$rule = $1;
-						logmsg (9, 3, "rule (if) is now: $rule");
+						logmsg(9, 3, "rule (if) is now: $rule");
    					} else {
     					$rule = $cmdcount++;
-						logmsg (9, 3, "rule (else) is now: $rule");
+						logmsg(9, 3, "rule (else) is now: $rule");
    					} # if arg
 					$stanzatype = "rule";
+					unless (exists $$cfghashref{formats}) {
+						logmsg(0, 0, "Aborted. Error, rule encounted before format defined.");
+						exit 2;
+					}
 					logmsg(6, 2, "stanzatype updated to: $stanzatype");
 					logmsg(6, 2, "rule updated to:$rule");
 				} elsif (/FORMAT/) {
@@ -351,11 +355,20 @@ sub processformat {
 			if (/DELIMITER/) {
 				$$cfghashref{delimiter} = $arg;
 				logmsg (5, 1, "Config Hash contents:");
-				&Dumper( %$cfghashref );
+				&Dumper( %$cfghashref ) if $DEBUG >= 9;
 			} elsif (/FIELDS/) {
-				$$cfghashref{fields} = $arg;
+				$$cfghashref{totalfields} = $arg;
+				for my $i(1..$$cfghashref{totalfields}) {
+					$$cfghashref{fields}{byindex}{$i} = "$i"; # map index to name
+					$$cfghashref{fields}{byname}{$i} = "$i"; # map name to index
+				}
 			} elsif (/FIELD(\d+)/) {
 				logmsg(6, 6, "FIELD#: $1 arg:$arg");
+				$$cfghashref{fields}{byindex}{$1} = "$arg"; # map index to name
+				$$cfghashref{fields}{byname}{$arg} = "$1"; # map name to index
+				if (exists($$cfghashref{fields}{byname}{$1}) ) {
+					delete($$cfghashref{fields}{byname}{$1});
+				}
   			} elsif (/^\}$/) {
   			} elsif (/^\{$/) {
   			} else {
@@ -609,9 +622,13 @@ sub actionrule {
 	} else {
 	 $resultsrule = $rule;
 	}
+	
+	unless ($$cfghashref{rules}{cmdregex}) {
+		$$cfghashref{rules}{cmdregex} = "";
+	}
 	logmsg (5, 3, "rule: $rule");
     logmsg (5, 4, "results goto: $resultsrule");
-    logmsg (5, 4, "cmdregex: $}{cmdregex}");
+    logmsg (5, 4, "cmdregex: $$cfghashref{rules}{cmdregex}");
     logmsg (5, 4, "CMD negative regex: $$cfghashref{rules}{$rule}{cmdregexnegat}");
     logmsg (5, 4, "line: $$line{line}");
 	if ($$cfghashref{rules}{$rule}{cmd} and $$cfghashref{rules}{$rule}{cmd} =~ /IGNORE/) {
@@ -842,13 +859,20 @@ sub matchregex {
 	my $regex = shift;
 	my $value = shift;
 	my $match = 0;
+	
+	# An empty or null $value = no match
 	logmsg(5, 3, " and I was called by ... ".&whowasi);
 #	profile( whoami(), whowasi() );
-	if ($value =~ /$$regex{regex}/ or  $$regex{regex} =~ /^\*$/ ) { 
-		logmsg (9, 4, "value ($value) matches regex /$$regex{regex}/");
-		$match = 1;
+	logmsg(6, 4, "Does value($value) match regex /$$regex{regex}/");
+	if ($value) {
+		if ($value =~ /$$regex{regex}/ or  $$regex{regex} =~ /^\*$/ ) { 
+			logmsg (9, 4, "value ($value) matches regex /$$regex{regex}/");
+			$match = 1;
+		} else {
+			logmsg (9, 4, "value ($value) doesn't match regex /$$regex{regex}/");
+		}
 	} else {
-		logmsg (9, 4, "value ($value) doesn't match regex /$$regex{regex}/");
+		logmsg(7, 5, "\$value is null, no match");
 	}
 }
 
@@ -860,8 +884,8 @@ sub matchingrules {
 
 	logmsg(5, 3, " and I was called by ... ".&whowasi);
 	logmsg (6, 3, "param:$param");
-	logmsg (6, 3, "value:$value");
-    logmsg (3, 2, "$param, match count: ".keys(%{$matchref})." value: $value");
+	logmsg (6, 3, "value:$value") if $value;
+    logmsg (3, 2, "$param, match count: ".keys(%{$matchref}) );
 
 	if (keys %{$matchref} == 0) {
 		# Check all rules as we haevn't had a match yet

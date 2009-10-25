@@ -14,45 +14,80 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-=head1 NAME
-logparse - syslog analysis tool
-=cut
+=pod
+
+=head1 logparse - syslog analysis tool
 
 =head1 SYNOPSIS
+
 ./logparse.pl [-c <configfile> ] [-l <logfile>] [-d <debug level>]
 
-Describe config file for log parse / summary engine
- Input fields from syslog:
-  Date, time, server, application, facility, ID, message
+=head1 Config file language description
 
-=head3 Config line
-  /server regex/, /app regex/, /facility regex/, /msg regex/, $ACTIONS
-   Summaries are required at various levels, from total instances to total sizes to server summaries.
+This is a complete redefine of the language from v0.1 and includes some major syntax changes.
+It was originally envisioned that it would be backwards compatible, but it won't be due to new requirements
+such as adding OR operations 
 
-=head2 ACTIONS
- COUNT - Just list the total number of matches
- SUM[x] - Report the sum of field x of all matches
- SUM[x], /regex/ - Apply regex to msg field of matches and report the sum of field x from that regex 
- SUM[x], /regex/, {y,z} - Apply regex to msg field of matches and report the sum of field x from that regex for fields y & z
- AVG[x], /regex/, {y,z} - Apply regex to msg field of matches and report the avg of field x from that regex for fields y & z
- COUNT[x], /regex/, {y,z} - Apply regex to msg field of matches and report the count of field x from that regex for matching fields y & z
+=head3 Stanzas
 
- Each entry can test or regex, if text interpret as regex /^string$/
-  Sample entry...
-    *, /rshd/, *, *, COUNT /connect from (.*)/, {1}
+The building block of this config file is the stanza which indicated by a pair of braces
+<Type> [<label>] {
+	# if label isn't declared, integer ID which autoincrements
+}
 
-=head2 BUGS:
-	See http://github.com/mikeknox/LogParse/issues
+There are 2 top level stanza types ...
+ - FORMAT
+  - doesn't need to be named, but if using multiple formats you should.
+ - RULE
+
 
 =head2 FORMAT stanza
+=over
 FORMAT <name> {
    DELIMITER <xyz>
    FIELDS <x>
    FIELD<x> <name>
 }
+=back
+=cut
 
-=head2 TODO:
+=head3 Parameters
+[LASTLINE] <label> [<value>]
+=item Parameters occur within stanza's.
+=item labels are assumed to be field matches unless they are known commands
+=item a parameter can have multiple values
+=item the values for a parameter are whitespace delimited, but fields are contained by /<some text>/ or {<some text}
+=item " ", / / & {  } define a single field which may contain whitespace
+=item any field matches are by default AND'd together
+=item multiple ACTION commands are applied in sequence, but are independent
+=item multiple REPORT commands are applied in sequence, but are independent
 
+- LASTLINE
+ - Applies the field match or action to the previous line, rather than the current line
+   - This means it would be possible to create configs which double count entries, this wouldn't be a good idea.
+
+=head4 Known commands
+These are labels which have a specific meaning. 
+REPORT <title> <line>
+ACTION <field> </regex/> <{matches}> <command> [<command specific fields>] [LASTLINE]
+ACTION <field> </regex/> <{matches}> sum <{sum field}> [LASTLINE]
+ACTION <field> </regex/> <{matches}> append <rule> <{field transformation}> [LASTLINE]
+
+=head4 Action commands
+ data for the actions are stored according to <{matches}>, so <{matches}> defines the unique combination of datapoints upon which any action is taken.
+ - Ignore
+ - Count  - Increment the running total for the rule for the set of <{matches}> by 1.
+ - Sum - Add the value of the field <{sum field}> from the regex match to the running total for the set of <{matches}>
+ - Append - Add the set of values <{matches}> to the results for rule <rule> according to the field layout described by <{field transformation}>
+ - LASTLINE - Increment the {x} parameter (by <sum field> or 1) of the rules that were matched by the LASTLINE (LASTLINE is determined in the FORMAT stanza) 
+
+=head3 Conventions
+ regexes are written as / ... / or /! ... /
+ /! ... / implies a negative match to the regex
+ matches are written as { a, b, c } where a, b and c match to fields in the regex
+ 
+=head1 Internal structures
+=over
 =head3 Config hash design
 	The config hash needs to be redesigned, particuarly to support other input log formats.
 	current layout:
@@ -73,18 +108,16 @@ FORMAT <name> {
 =head3 regex hash
 	$regex{regex} = regex string
 	$regex{negate} = 1|0 - 1 regex is to be negated
+=back
 
+=head1 BUGS:
+	See http://github.com/mikeknox/LogParse/issues
 =cut
 
 # expects data on std in
 use strict;
 use Getopt::Std;
-#no strict 'refs';
-#use Data::Dump qw(pp);
 use Data::Dumper qw(Dumper);
-
-#use utils;
-#use logparse;
 
 # Globals
 my %profile;
@@ -94,7 +127,6 @@ my %opts;
 my $CONFIGFILE="logparse.conf";
 my %cfghash;
 my %reshash;
-my $cmdcount = 0;
 my $UNMATCHEDLINES = 1;
 my $SYSLOGFILE = "/var/log/messages";
 my %svrlastline; # hash of the last line per server, excluding 'last message repeated x times'
@@ -104,20 +136,52 @@ $DEBUG = $opts{d} if $opts{d};
 $CONFIGFILE = $opts{c} if $opts{c};
 $SYSLOGFILE = $opts{l} if $opts{l};
 
-loadcfg (\%cfghash, $CONFIGFILE, $cmdcount);
-print Dumper(%cfghash);
-#processlogfile(\%cfghash, \%reshash, $SYSLOGFILE);
+loadcfg (\%cfghash, $CONFIGFILE);
+print Dumper(\%cfghash);
+processlogfile(\%cfghash, \%reshash, $SYSLOGFILE);
 #report(\%cfghash, \%reshash);
 #profilereport();
 
 exit 0;
+
+sub parselogline {
+=head5 pareseline(\%cfghashref, $text, \%linehashref)
+	
+=cut
+	my $cfghashref = shift;
+	my $text = shift;
+	my $linehashref = shift;
+	logmsg(5, 3, " and I was called by ... ".&whowasi);
+	logmsg(6, 4, "Text: $text");
+	#@{$line{fields}} = split(/$$cfghashref{FORMAT}{ $format }{fields}{delimiter}/, $line{line}, $$cfghashref{FORMAT}{$format}{fields}{totalfields} );
+	my @tmp;
+	logmsg (6, 4, "delimiter: $$cfghashref{delimiter}");
+	logmsg (6, 4, "totalfields: $$cfghashref{totalfields}");
+	# if delimiter is not present and default field is set
+	# assign text to default field
+	# else
+	(@tmp) = split (/$$cfghashref{delimiter}/, $text, $$cfghashref{totalfields});
+	
+	logmsg (9, 4, "Got field values ... ".Dumper(@tmp));
+	for (my $i = 0; $i <= $#tmp+1; $i++) {
+		$$linehashref{ $$cfghashref{byindex}{$i} } = $tmp[$i];
+		logmsg(9, 4, "Checking field $i(".($i+1).")");
+		if (exists($$cfghashref{$i + 1} ) ) {
+			logmsg(9, 4, "Recurisive call for field $i(".($i+1).") with text $text");
+			parselogline(\%{ $$cfghashref{$i + 1} }, $tmp[$i], $linehashref);
+		}
+	}
+	logmsg (9, 4, "line results now ...".Dumper($linehashref));
+}
 
 sub processlogfile {
 	my $cfghashref = shift;
 	my $reshashref = shift;
 	my $logfile = shift;
 
-	logmsg(1, 0, "processing $logfile ...");
+	my $format = $$cfghashref{FORMAT}{default}; # TODO - make dynamic
+	
+	logmsg(1, 0, "processing $logfile using format $format...");
 	logmsg(5, 1, " and I was called by ... ".&whowasi);
 	open (LOGFILE, "<$logfile") or die "Unable to open $SYSLOGFILE for reading...";
 	while (<LOGFILE>) {
@@ -128,29 +192,59 @@ sub processlogfile {
 		$line{line} = $_;
 
     	logmsg(5, 1, "Processing next line");
-		($line{mth}, $line{date}, $line{time}, $line{svr}, $line{app}, $line{msg}) = split (/\s+/, $line{line}, 6);
-		logmsg(9, 2, "mth: $line{mth}, date: $line{date}, time: $line{time}, svr: $line{svr}, app: $line{app}, msg: $line{msg}");
+    	logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");
+    	logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
+    	#@{$line{fields}} = split(/$$cfghashref{FORMAT}{ $format }{fields}{delimiter}/, $line{line}, $$cfghashref{FORMAT}{$format}{fields}{totalfields} );
+    	parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $line{line}, \%line);
+    	
+		#($line{mth}, $line{date}, $line{time}, $line{svr}, $line{app}, $line{msg}) = split (/\s+/, $line{line}, 6);
+#		logmsg(9, 2, "mth: $line{mth}, date: $line{date}, time: $line{time}, svr: $line{svr}, app: $line{app}, msg: $line{msg}");
 		logmsg(9, 1, "Checking line: $line{line}");
-		logmsg(9, 1, "msg: $line{msg}");
+		logmsg(9, 2, "Extracted Field contents ...\n".Dumper(@{$line{fields}}));
 		
+		#logmsg(9, 1, "Checking line: $line{line}");
+		#logmsg(9, 1, "msg: $line{msg}");
+#TODO - add subfield functionality
+=replace		
 		if ($line{msg} =~ /^\[/) {
 			($line{facility}, $line{msg}) = split (/]\s+/, $line{msg}, 2);
 			$line{facility} =~ s/\[//;
 			logmsg(9, 1, "facility: $line{facility}");
 		}
-	
-# These need to be abstracted out per description in the FORMAT stanza	
+=cut	
+#TODO These need to be abstracted out per description in the FORMAT stanza	
 		my %matches;
-		my %matchregex = ("svrregex", "svr", "appregex", "app", "facregex", "facility", "msgregex", "line");
-		for my $param ("appregex", "facregex", "msgregex", "svrregex") {
-			$line{ $matchregex{$param} } = "" unless $line{ $matchregex{$param} }; # this really should be elsewhere, it's a hack
-			matchingrules($cfghashref, $param, \%matches, $line{ $matchregex{$param} } );
+		
+#		my %matchregex = ("svrregex", "svr", "appregex", "app", "facregex", "facility", "msgregex", "line");
+		for my $field (keys %{$$cfghashref{formats}{$format}{fields}{byname} }) {
+			matchingrules($cfghashref, $field, \%matches, $line{ $field } );
 		}
+		###matchingrules($cfghashref, $param, \%matches, $line{ $matchregex{$param} } );
+		#}
 		logmsg(9, 2, keys(%matches)." matches so far");
 		$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} and next unless keys %matches > 0;
 		logmsg(9,1,"Results hash ...");
 		Dumper(%$reshashref);
-	
+#TODO Handle "Message repeated" type scenarios when we don't know which field should contatin the msg
+#UP to here	
+		# FORMAT stanza contains a substanza which describes repeat for the given format
+		# format{repeat}{cmd} - normally regex, not sure what other solutions would apply
+		# format{repeat}{regex} - array of regex's hashes
+		# format{repeat}{field} - the name of the field to apply the cmd (normally regex) to
+		
+		#TODO describe matching of multiple fields ie in syslog we want to match regex and also ensure that HOST matches previous previousline
+		# Detect and count repeats
+		if ( exists( $$cfghashref{formats}{$format}{repeat} ) ) {
+			my $repeatref = \%{$$cfghashref{formats}{$format}{repeat} };
+			if ($$repeatref{cmd} =~ /REGEX/ ) {
+				foreach my $i (@{$$repeatref{regex}}) {
+					if ($line{$$repeatref{field}} =~ /$$repeatref{regex}[$i]{regex}/) {
+						
+					}
+				}
+			}
+		}
+		
     	if ($line{msg} =~ /message repeated/ and exists $svrlastline{$line{svr} }{line}{msg} ) { # and keys %{$svrlastline{ $line{svr} }{rulematches}} ) {
         	logmsg (9, 2, "last message repeated and matching svr line");
         	my $numrepeats = 0;
@@ -227,10 +321,44 @@ sub processlogfile {
 	logmsg (1, 0, "Finished processing $logfile.");
 }
 
+sub getparameter {
+=head6 getparamter($line)
+returns array of line elements
+lines are whitespace delimited, except when contained within " ", {} or //
+=cut
+	my $line = shift;
+	logmsg (5, 3, " and I was called by ... ".&whowasi);
+	
+	chomp $line;
+	logmsg (9, 5, "passed $line");
+	my @A;
+	if ($line =~ /^#|^\s+#/ ) {
+		logmsg(9, 4, "comment line, skipping, therefore returns are empty strings");
+	} elsif ($line =~ /^\s+$/ or $line =~ /^$/ ){
+		logmsg(9, 4, "empty line, skipping, therefore returns are empty strings");
+	} else {
+		$line =~ s/#.*$//; # strip anything after #
+		#$line =~ s/{.*?$//; # strip trail {, it was required in old format
+		@A =  $line =~ /(\/.+?\/|\{.+?\}|".+?"|\S+)/g;
+	}
+	for (my $i = 0; $i <= $#A; $i++ ) {
+		logmsg (9, 5, "\$A[$i] is $A[$i]");
+		# Strip any leading or trailing //, {}, or "" from the fields
+		$A[$i] =~ s/^(\"|\/|{)//;
+		$A[$i] =~ s/(\"|\/|})$//;
+		logmsg (9, 5, "$A[$i] has had the leading \" removed");	
+	}
+	logmsg (9, 5, "returning @A");
+	return @A;
+}
+
 sub parsecfgline {
+=head6 parsecfgline($line)
+Depricated, use getparameter()
+takes line as arg, and returns array of cmd and value (arg)
+=cut
 	my $line = shift;
 
-	#profile( whoami(), whowasi() );
 	logmsg (5, 3, " and I was called by ... ".&whowasi);
 	my $cmd = "";
 	my $arg = "";
@@ -239,7 +367,7 @@ sub parsecfgline {
 	logmsg(5, 3, " and I was called by ... ".&whowasi);
 	logmsg (6, 4, "line: ${line}");
 
-	if ($line =~ /^#|\s+#/ ) {
+	if ($line =~ /^#|^\s+#/ ) {
 		logmsg(9, 4, "comment line, skipping, therefore returns are empty strings");
 	} elsif ($line =~ /^\s+$/ or $line =~ /^$/ ){
 		logmsg(9, 4, "empty line, skipping, therefore returns are empty strings");
@@ -255,82 +383,74 @@ sub parsecfgline {
 }
 
 sub loadcfg {
+=head6 loadcfg(<cfghashref>, <cfgfile name>)
+	Load cfg loads the config file into the config hash, which it is passed as a ref.
+	
+	loop through the logfile
+	- skip any lines that only contain comments or whitespace
+	- strip any comments and whitespace off the ends of lines
+	- if a RULE or FORMAT stanza starts, determine the name
+	- if in a RULE or FORMAT stanza pass any subsequent lines to the relevant parsing subroutine.
+	- brace counts are used to determine whether we've finished a stanza	
+=cut
 	my $cfghashref = shift;
 	my $cfgfile = shift;
-	my $cmdcount = shift;
 
 	open (CFGFILE, "<$cfgfile");
 
 	logmsg(1, 0, "Loading cfg from $cfgfile");
 	logmsg(5, 3, " and I was called by ... ".&whowasi);
 	
-	my $rule = -1;
-	my $bracecount = 0;
+	my $rulename = -1;
+	my $ruleid = 0;
 	my $stanzatype = "";
 
 	while (<CFGFILE>) {
 		my $line = $_;
 
 		logmsg(5, 1, "line: $line");
-		logmsg(6, 2, "bracecount:$bracecount");
-		logmsg(6, 2, "stanzatype:$stanzatype");
+		logmsg(6, 2, "stanzatype:$stanzatype ruleid:$ruleid rulename:$rulename");
 
-		my $cmd; my $arg;
-		($cmd, $arg) = parsecfgline($line);
-		next unless $cmd;
-		logmsg(6, 2, "rule:$rule");
-		logmsg(6, 2, "cmdcount:$cmdcount");
-		logmsg(6, 2, "cmd:$cmd arg:$arg rule:$rule cmdcount:$cmdcount");
+		my @args = getparameter($line);
+		next unless $args[0];
+		logmsg(6, 2, "line parameters: @args");
 
-		if ($bracecount == 0 ) {
- 			for ($cmd) {
-  				if (/RULE/) {
-   					if ($arg =~ /(.*)\s+\{/) {
-    					$rule = $1;
-						logmsg(9, 3, "rule (if) is now: $rule");
-   					} else {
-    					$rule = $cmdcount++;
-						logmsg(9, 3, "rule (else) is now: $rule");
-   					} # if arg
-					$stanzatype = "rule";
-					unless (exists $$cfghashref{formats}) {
-						logmsg(0, 0, "Aborted. Error, rule encounted before format defined.");
-						exit 2;
-					}
-					logmsg(6, 2, "stanzatype updated to: $stanzatype");
-					logmsg(6, 2, "rule updated to:$rule");
-				} elsif (/FORMAT/) {
-   					if ($arg =~ /(.*)\s+\{/) {
-    					$rule = $1;
-   					} # if arg
-					$stanzatype = "format";
-					logmsg(6, 2, "stanzatype updated to: $stanzatype");
-				} elsif (/\}/) {
-					# if bracecount = 0, cmd may == "}", so ignore
-				} else {
-    				print STDERR "Error: $cmd didn't match any stanzasn\n";
-				} # if cmd
-			} # for cmd
-		} # bracecount == 0
-		if  ($cmd =~ /\{/ or $arg =~ /\{/) {
-				$bracecount++;
-		} elsif  ($cmd =~ /\}/ or $arg =~ /\}/) {
-				$bracecount--;
-		} # if cmd or arg
-
-		if ($bracecount > 0) { # else bracecount
-			for ($stanzatype) {
-				if (/rule/) {
-					logmsg (6, 2, "About to call processrule ... cmd:$cmd arg:$arg rule:$rule cmdcount:$cmdcount");
-					processrule( \%{ $$cfghashref{rules}{$rule} }, $rule, $cmd, $arg);
-				} elsif (/format/) {
-					logmsg (6, 2, "About to call processformat ... cmd:$cmd arg:$arg rule:$rule cmdcount:$cmdcount");
-					processformat( \%{$$cfghashref{formats}{$rule}} , $rule, $cmd, $arg);
-				} # if stanzatype
-			} #if stanzatype
-		} else {# else bracecount
-			logmsg (1, 2, "ERROR: bracecount: $bracecount. How did it go negative??");
-		} # bracecount
+ 		for ($args[0]) {
+  			if (/RULE|FORMAT/) {
+  				$stanzatype=$args[0];
+   				if ($args[1] and $args[1] !~ /\{/) {
+    				$rulename = $args[1];
+					logmsg(9, 3, "rule (if) is now: $rulename");
+   				} else {
+    				$rulename = $ruleid++;
+					logmsg(9, 3, "rule (else) is now: $rulename");
+   				} # if arg
+   				$$cfghashref{$stanzatype}{$rulename}{name}=$rulename; # setting so we can get name later from the sub hash
+				unless (exists $$cfghashref{FORMAT}) {
+					logmsg(0, 0, "Aborted. Error, rule encounted before format defined.");
+					exit 2;
+				}
+				
+				logmsg(6, 2, "stanzatype updated to: $stanzatype");
+				logmsg(6, 2, "rule updated to:$rulename");
+			} elsif (/FIELDS/) {
+				fieldbasics(\%{ $$cfghashref{$stanzatype}{$rulename}{fields} }, \@args);
+			} elsif (/FIELD$/) {
+				fieldindex(\%{ $$cfghashref{$stanzatype}{$rulename}{fields} }, \@args);
+			} elsif (/DEFAULT/) {
+				$$cfghashref{$stanzatype}{$rulename}{default} = 1;
+				$$cfghashref{$stanzatype}{default} = $rulename;				
+			} elsif (/LASTLINEINDEX/) {
+				$$cfghashref{$stanzatype}{$rulename}{LASTLINEINDEX} = $args[1];
+			} elsif (/ACTION/) {
+				logmsg(9, 5, "stanzatype: $stanzatype rulename:$rulename");			
+				setaction(\@{ $$cfghashref{$stanzatype}{$rulename}{actions} }, \@args);
+			} elsif (/REPORT/) {
+				setreport(\@{ $$cfghashref{$stanzatype}{$rulename}{reports} }, \@args);
+			} else {
+				# Assume to be a match								
+			}# if cmd
+		} # for cmd
 	} # while
 	close CFGFILE;
 	logmsg (5, 1, "Config Hash contents:");
@@ -338,6 +458,152 @@ sub loadcfg {
 	logmsg (1, 0, "finished processing cfg: $cfgfile");
 } # sub loadcfg
 
+sub setaction {
+=head6 setaction ($cfghasref, @args)
+where cfghashref should be a reference to the action entry for the rule
+sample
+ACTION MSG /(.*): TTY=(.*) ; PWD=(.*); USER=(.*); COMMAND=(.*)/ {HOST, 1, 4, 5} count
+=cut
+
+	my $actionref = shift;
+	my $argsref = shift;
+
+	logmsg (5, 4, " and I was called by ... ".&whowasi);
+	logmsg (6, 5, "args: ".Dumper(@$argsref));
+	
+	logmsg (9, 5, "args: $$argsref[2]");
+	unless (exists ${@$actionref}[0] ) {
+		logmsg(9, 3, "actions array, doesn't exist, initialising");
+		@$actionref = ();
+	}
+	my $actionindex = $#{ @$actionref } + 1;
+	logmsg(9, 3, "actionindex: $actionindex");
+# ACTION formats:
+#ACTION <field> </regex/> [<{matches}>] <command> [<command specific fields>] [LASTLINE]
+#ACTION <field> </regex/> <{matches}> <sum|count> [<{sum field}>] [LASTLINE]
+#ACTION <field> </regex/> <{matches}> append <rule> <{field transformation}> [LASTLINE]
+# count - 4 or 5
+# sum - 5 or 6
+# append - 6 or 7
+
+	$$actionref[$actionindex]{field} = $$argsref[1];
+	$$actionref[$actionindex]{regex} = $$argsref[2];
+	if ($$argsref[3] =~ /count/i) {
+		$$actionref[$actionindex]{cmd} = $$argsref[3];
+	} else {
+		$$actionref[$actionindex]{matches} = $$argsref[3];
+		$$actionref[$actionindex]{cmd} = $$argsref[4];	
+	}
+	for ($$argsref[4]) {
+		if (/^sum$/i) {
+			$$actionref[$actionindex]{sourcefield} = $$argsref[5];
+		} elsif (/^append$/i) {
+			$$actionref[$actionindex]{appendtorule} = $$argsref[5];
+			$$actionref[$actionindex]{fieldmap} = $$argsref[6];
+		} else {
+			logmsg (1,0, "WARNING, unrecognised command ($$argsref[4]) in ACTION command");
+		}
+	}
+	my @tmp = grep /^LASTLINE$/i, @$argsref;
+	if ($#tmp) {
+		$$actionref[$actionindex]{lastline} = 1; 
+	}
+	
+	$$actionref[$actionindex]{cmd} = $$argsref[4];
+}
+
+sub setreport {
+=head6 fieldbasics ($cfghasref, @args)
+where cfghashref should be a reference to the fields entry for the rule
+REPORT "Sudo Usage" "{2} ran {4} as {3} on {1}: {x} times"
+=cut
+
+	my $reportref = shift;
+	my $argsref = shift;
+
+	logmsg (5, 4, " and I was called by ... ".&whowasi);
+	logmsg (6, 5, "args: ".Dumper(@$argsref));
+	logmsg (9, 5, "args: $$argsref[2]");
+	
+	unless (exists ${@$reportref}[0] ) {
+		logmsg(9, 3, "report array, doesn't exist, initialising");
+		@$reportref = ();
+	}
+	
+	my $reportindex = $#{ @$reportref } + 1;
+	logmsg(9, 3, "reportindex: $reportindex");
+	
+	$$reportref[$reportindex]{title} = $$argsref[1];
+	$$reportref[$reportindex]{line} = $$argsref[2];
+}
+sub fieldbasics {
+=head6 fieldbasics ($cfghasref, @args)
+where cfghashref should be a reference to the fields entry for the rule
+Creates the recursive index listing for fields
+Passed @args - array of entires for config line
+format
+
+FIELDS 6-2 /]\s+/
+or
+FIELDS 6 /\w+/
+=cut
+
+	my $cfghashref = shift;
+	my $argsref = shift;
+
+	logmsg (5, 4, " and I was called by ... ".&whowasi);
+	logmsg (6, 5, "args: ".Dumper(@$argsref));
+	logmsg (9, 5, "fieldindex: $$argsref[1] fieldname $$argsref[2]");
+	logmsg (9, 5, "fieldcount: $$argsref[1]");
+	if ($$argsref[1] =~ /^(\d+)-(.*)$/ ) {
+		# this is an infinite loop, need to rectify
+		logmsg (6, 5, "recursive call using $1");
+		$$argsref[1] = $2;
+		logmsg (9, 5, "Updated fieldcount to: $$argsref[1]");
+		logmsg (9, 5, "Calling myself again using hashref{fields}{$1}");
+		fieldbasics(\%{ $$cfghashref{$1} }, $argsref);
+	} else {
+		$$cfghashref{delimiter} = $$argsref[2];
+		$$cfghashref{totalfields} = $$argsref[1];
+		for my $i(0..$$cfghashref{totalfields} - 1 ) {
+			$$cfghashref{byindex}{$i} = "$i"; # map index to name
+			$$cfghashref{byname}{$i} = "$i"; # map name to index
+		}
+	}
+}
+
+sub fieldindex {
+=head6 fieldindex ($cfghasref, @args)
+where cfghashref should be a reference to the fields entry for the rule
+Creates the recursive index listing for fields
+Passed @args - array of entires for config line
+=cut
+
+	my $cfghashref = shift;
+	my $argsref = shift;
+
+	logmsg (5, 4, " and I was called by ... ".&whowasi);
+	logmsg (6, 5, "args: ".Dumper(@$argsref));
+	logmsg (9, 5, "fieldindex: $$argsref[1] fieldname $$argsref[2]");
+	if ($$argsref[1] =~ /^(\d+)-(.*)$/ ) {
+		# this is an infinite loop, need to rectify
+		logmsg (6, 5, "recursive call using $1");
+		$$argsref[1] = $2;
+		fieldindex(\%{ $$cfghashref{$1} }, $argsref);
+	} else {
+		$$cfghashref{byindex}{$$argsref[1]-1} = $$argsref[2]; # map index to name
+		$$cfghashref{byname}{$$argsref[2]} = $$argsref[1]-1; # map name to index
+		if (exists( $$cfghashref{byname}{$$argsref[1]-1} ) )  {
+			delete( $$cfghashref{byname}{$$argsref[1]-1} );
+		}		
+	}
+	my @tmp = grep /^DEFAULT$/i, @$argsref;
+	if ($#tmp) {
+		$$cfghashref{defaultfield} = $$argsref[1]; 
+	}		
+}
+
+=obsolete
 sub processformat {
 	my $cfghashref = shift;
 	my $rule = shift;	# name of the rule to be processed
@@ -369,6 +635,15 @@ sub processformat {
 				if (exists($$cfghashref{fields}{byname}{$1}) ) {
 					delete($$cfghashref{fields}{byname}{$1});
 				}
+			} elsif (/DEFAULT/) {
+				$$cfghashref{default} = 1;
+			#} elsif (/REPEAT/) {
+#TODO Define sub stanzas, it's currently hacked in
+			#	extractcmd(\%{$$cfghashref{repeat}}, $cmd, "repeat", $arg);0
+			} elsif (/REGEX/) {
+				extractcmd(\%{$$cfghashref{repeat}}, $cmd, "regex", $arg);
+			} elsif (/FIELD/) {
+				$$cfghashref{repeat}{field} = $arg;
   			} elsif (/^\}$/) {
   			} elsif (/^\{$/) {
   			} else {
@@ -380,79 +655,86 @@ sub processformat {
 
 sub processrule {
 	my $cfghashref = shift;
-	my $rule = shift;	# name of the rule to be processed
+	my $forhashref = shift; # ref to log format hash
 	my $cmd = shift;
 	my $arg = shift;
 
 	#profile( whoami(), whowasi() );
 	logmsg (5, 4, " and I was called by ... ".&whowasi);
-	logmsg (5, 4, "Processing $rule with cmd: $cmd and arg: $arg");
+	logmsg (5, 4, "Processing $$cfghashref{name} with cmd: $cmd and arg: $arg");
 
+	logmsg (5, 5, "Format hash ...".Dumper(%$forhashref) );
 	next unless $cmd;
 	for ($cmd) {
-		if (/HOST/) {
-			# fields
-    		extractregex ($cfghashref, "svrregex", $arg, $rule);
-  		} elsif (/APP($|\s+)/) {
-    		extractregex ($cfghashref, "appregex", $arg, $rule);
-  		} elsif (/FACILITY/) {
-    		extractregex ($cfghashref, "facregex", $arg, $rule);
-  		} elsif (/MSG/) {
-    		extractregex ($cfghashref, "msgregex", $arg, $rule);
-  		} elsif (/CMD/) {
-    		extractregex ($cfghashref, "cmd", $arg, $rule)  unless $arg =~ /\{/;
+   # Static parameters
+   		if (/FORMAT/){
+   			# This really should be the first entry in a rule stanza if it's set
+   			$$cfghashref{format} = $arg;
+   		} elsif (/CMD/) {
+    		extractcmd($cfghashref, $cmd, "cmd", $arg);
   		} elsif (/^REGEX/) {
-    		extractregexold ($cfghashref, "cmdregex", $arg, $rule);
+    		extractcmd($cfghashref, $cmd, "regex", $arg);
 		} elsif (/MATCH/) {
-			extractregexold ($cfghashref, "cmdmatrix", $arg, $rule);
-   			$$cfghashref{cmdmatrix} =~ s/\s+//g; # strip all whitespace
+			extractcmd($cfghashref, $cmd, "matrix", $arg);
   		} elsif (/IGNORE/) {
-   			$$cfghashref{cmd} = $cmd;
+   			extractcmd(\%{$$cfghashref{CMD}}, $cmd, "", $arg);
   		} elsif (/COUNT/) {
-   			$$cfghashref{cmd} = $cmd;
+   			extractcmd(\%{$$cfghashref{CMD}}, $cmd, "", $arg);
   		} elsif (/SUM/) {
-   			extractregex ($cfghashref, "targetfield", $arg, $rule);
-   			$$cfghashref{targetfield} =~ s/\s+//g; # strip all whitespace
-   			$$cfghashref{cmd} = $cmd;
+   			extractcmd(\%{$$cfghashref{CMD}}, $cmd, "targetfield", $arg);
   		} elsif (/AVG/) {
-   			extractregex ($cfghashref, "targetfield", $arg, $rule);
-   			$$cfghashref{targetfield} =~ s/\s+//g; # strip all whitespace
-   			$$cfghashref{cmd} = $cmd;
+  			extractcmd(\%{$$cfghashref{CMD}}, $cmd, "targetfield", $arg);
   		} elsif (/TITLE/) {
-   			$$cfghashref{rpttitle} = $arg;
-   			$$cfghashref{rpttitle} = $1 if $$cfghashref{rpttitle} =~ /^\"(.*)\"$/;
+   			$$cfghashref{RPT}{title} = $arg;
+   			$$cfghashref{RPT}{title} = $1 if $$cfghashref{RPT}{title} =~ /^\"(.*)\"$/;
   		} elsif (/LINE/) {
-   			$$cfghashref{rptline} = $arg;
-   			$$cfghashref{rptline} = $1 if $$cfghashref{rptline} =~ /\^"(.*)\"$/;
+   			$$cfghashref{RPT}{line} = $arg;
+   			$$cfghashref{RPT}{line} = $1 if $$cfghashref{RPT}{line} =~ /\^"(.*)\"$/;
   		} elsif (/APPEND/) {
-   			$$cfghashref{appendrule} = $arg;
-   			logmsg (1, 0, "*** Setting append for $rule to $arg");
+   			$$cfghashref{RPT}{appendrule} = $arg;
+   			logmsg (1, 0, "*** Setting append for $$cfghashref{name} to $arg");
   		} elsif (/REPORT/) {
   		} elsif (/^\}$/) {
-		#	$bracecount{closed}++;
   		} elsif (/^\{$/) {
-		#	$bracecount{open}++;
+# Dynamic parameters (defined in FORMAT stanza)
+  		} elsif (exists($$forhashref{fields}{byname}{$cmd} ) ) {
+  			extractregex (\%{$$cfghashref{fields} }, $cmd, $arg);	
+# End Dynamic parameters
   		} else {
     		print "Error: $cmd didn't match any known fields\n\n";
   		}
 	} # for
-    logmsg (5, 1,  "Finished processing rule: $rule");
+    logmsg (5, 1,  "Finished processing rule: $$cfghashref{name}");
 	logmsg (9, 1, "Config hash after running processrule");
 	Dumper(%$cfghashref);
 } # sub processrule
+=cut
 
+sub extractcmd {		
+	my $cfghashref = shift;
+	my $cmd = shift;
+	my $param = shift; # The activity associated with cmd
+	my $arg = shift; # The value for param
+	
+	if ($param) {
+		extractregex ($cfghashref, "$param", $arg);
+   		$$cfghashref{$param} =~ s/\s+//g; # strip all whitespace		
+	}	
+
+   	$$cfghashref{cmd} = $cmd;
+}
+			
 sub extractregexold {
 	# Keep the old behaviour
 	my $cfghashref = shift;
     my $param = shift;
     my $arg = shift;
-	my $rule = shift;
 
 #	profile( whoami(), whowasi() );
 	logmsg (5, 3, " and I was called by ... ".&whowasi);
 	my $paramnegat = $param."negate";
 
-    logmsg (5, 1, "rule: $rule param: $param arg: $arg");
+    logmsg (5, 1, "rule: $$cfghashref{name} param: $param arg: $arg");
     if ($arg =~ /^!/) {
         $arg =~ s/^!//g;
         $$cfghashref{$paramnegat} = 1;
@@ -481,13 +763,13 @@ sub extractregex {
 	my $cfghashref = shift;
     my $param = shift;
     my $arg = shift;
-	my $rule = shift;
 
 	my $index = 0;
 
 #	profile( whoami(), whowasi() );
 	logmsg (5, 3, " and I was called by ... ".&whowasi);
-	logmsg (1, 3, " rule: $rule for param $param with arg $arg ");
+	logmsg (1, 3, " rule: $$cfghashref{name} for param $param with arg $arg ");
+	#TODO {name} is null when called for sub stanzas such as CMD or REPEAT, causes an "uninitialised value" warning
 	if (exists $$cfghashref{$param}[0] ) {
 		$index = @{$$cfghashref{$param}};
 	} else {

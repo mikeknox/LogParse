@@ -137,10 +137,9 @@ $CONFIGFILE = $opts{c} if $opts{c};
 $SYSLOGFILE = $opts{l} if $opts{l};
 
 loadcfg (\%cfghash, $CONFIGFILE);
-print Dumper(\%cfghash);
+logmsg(7, 3, "cfghash:".Dumper(\%cfghash));
 processlogfile(\%cfghash, \%reshash, $SYSLOGFILE);
-#report(\%cfghash, \%reshash);
-#profilereport();
+report(\%cfghash, \%reshash);
 
 exit 0;
 
@@ -203,7 +202,7 @@ sub processlogfile {
     	logmsg(5, 1, "Processing next line");
     	logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");
     	logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
-    	#@{$line{fields}} = split(/$$cfghashref{FORMAT}{ $format }{fields}{delimiter}/, $line{line}, $$cfghashref{FORMAT}{$format}{fields}{totalfields} );
+
     	parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $line{line}, \%line);
     	
 		#($line{mth}, $line{date}, $line{time}, $line{svr}, $line{app}, $line{msg}) = split (/\s+/, $line{line}, 6);
@@ -219,8 +218,8 @@ sub processlogfile {
 		###matchingrules($cfghashref, $param, \%matches, $line{ $matchregex{$param} } );
 		#}
 		logmsg(9, 2, keys (%rules)." matches so far");
-		$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} and next unless keys(%rules) > 0;
-		logmsg(9,1,"Results hash ...".Dumper(%$reshashref) );
+#		$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} and next unless keys(%rules) > 0;
+
 #TODO Handle "Message repeated" type scenarios when we don't know which field should contatin the msg
 #UP to here	
 		# FORMAT stanza contains a substanza which describes repeat for the given format
@@ -325,7 +324,8 @@ sub processlogfile {
         	}
     	}
 =cut
-    	logmsg (5, 1, "finished processing line");
+			logmsg(9 ,1, "Results hash ...".Dumper(%$reshashref) );
+		    logmsg (5, 1, "finished processing line");
 		}
 =does this segment need to be rewritten or depricated?
 	foreach my $server (keys %svrlastline) {
@@ -553,6 +553,12 @@ REPORT "Sudo Usage" "{2} ran {4} as {3} on {1}: {x} times"
 	
 	$$reportref[$reportindex]{title} = $$argsref[1];
 	$$reportref[$reportindex]{line} = $$argsref[2];
+	if ($$argsref[3]) {
+		$$reportref[$reportindex]{cmd} = $$argsref[3];	
+	} else {
+		$$reportref[$reportindex]{cmd} = "count";
+	}
+	
 }
 sub fieldbasics {
 =head6 fieldbasics ($cfghasref, @args)
@@ -832,66 +838,102 @@ sub report {
 	my $rpthashref = shift;
 
 	logmsg(1, 0, "Ruuning report");
-#	profile( whoami(), whowasi() );
 	logmsg (5, 0, " and I was called by ... ".&whowasi);
 
-	logmsg(5, 1, "Dump of results hash ...");
-	Dumper(%$reshashref) if $DEBUG >= 5;
+	logmsg(5, 1, "Dump of results hash ...".Dumper($reshashref));
 
 	print "\n\nNo match for lines:\n";
 	foreach my $line (@{@$reshashref{nomatch}}) {
 		print "\t$line";
 	}
 	print "\n\nSummaries:\n";
-	for my $rule (sort keys %$reshashref)  {
+	for my $rule (sort keys %{ $$cfghashref{RULE} })  {
 		next if $rule =~ /nomatch/;
-		if (exists ($$cfghashref{rules}{$rule}{rpttitle})) {
-			print "$$cfghashref{rules}{$rule}{rpttitle}\n";
-		} else {
-			logmsg (4, 2, "Rule: $rule");
-		}
+		my %ruleresults = summariseresults(\%{ $$cfghashref{RULE}{$rule} }, \%{ $$reshashref{$rule} });
+		logmsg (5, 2, "\%ruleresults ... ".Dumper(%ruleresults));
+		if (exists ($$cfghashref{RULE}{$rule}{reports} ) ) {
+			for my $rptid ($#{ $$cfghashref{RULE}{$rule}{reports} } ) {
+				logmsg (4, 1, "Rule: $rule\[$rptid\]");
+				if (exists ($$cfghashref{RULE}{$rule}{reports}[$rptid]{title} ) ) {
+					print "$$cfghashref{RULE}{$rule}{reports}[$rptid]{title}\n";
+				} else {
+					logmsg (4, 2, "No title");
+				}
+				
+				for my $key (keys %ruleresults) {
+					logmsg (5, 3, "key:$key");
+					if (exists ($$cfghashref{RULE}{$rule}{reports}[$rptid]{line})) {
+						print "\t".rptline(\% {$$cfghashref{RULE}{$rule}{reports}[$rptid] }, \%{$ruleresults{$key} }, $rule, $rptid, $key)."\n";
+					} else {
+						print "\t$$reshashref{$rule}{$key}: $key\n";
+					}
+				}
+				print "\n";	
+			} # for rptid
+		} # if reports in %cfghash{RULE}{$rule}
+	} # for rule in %reshashref
+} #sub
 
-		for my $key (keys %{$$reshashref{$rule}} )  {
-			if (exists ($$cfghashref{rules}{$rule}{rptline})) {
-				print "\t".rptline($cfghashref, $reshashref, $rpthashref, $rule, $key)."\n";
-			} else {
-				print "\t$$rpthashref{$rule}{$key}: $key\n";
-			}
-		}
-		print "\n";
-	}
+sub summariseresults {
+	my $cfghashref = shift; # passed $cfghash{RULE}{$rule}{actions}
+	my $reshashref = shift; # passed $reshashref{$rule}
+	#my $rule = shift;
+	# loop through reshash for a given rule and combine the results of all the actions
+	# sum and count totals are summed together
+	# AVG is avg'd against the running total
+	# won't make sense if there are avg and sum/count actions, but this wouldn't make a lot of sense anyway
+	# returns a summarised hash
+	
+	my %results;
+	
+	for my $actionid (keys( %$reshashref ) ) {
+		for my $key (keys %{ $$reshashref{$actionid} } ) {
+			$results{$key}{count} += $$reshashref{$actionid}{$key}{count};
+			$results{$key}{total} += $$reshashref{$actionid}{$key}{total};
+			$results{$key}{avg} = $results{$key}{total} / $results{$key}{count};
+		} # for rule/actionid/key 
+	}  # for rule/actionid
+	return %results;
 }
 
 sub rptline {
-	my $cfghashref = shift;
-	my $reshashref = shift;
-	my $rpthashref = shift;
+	my $cfghashref = shift; # %cfghash{RULE}{$rule}{reports}{$rptid}
+	my $reshashref = shift; # reshash{$rule}
+	#my $rpthashref = shift;
 	my $rule = shift;
+	my $rptid = shift;
 	my $key = shift;
-	my $line = $$cfghashref{rules}{$rule}{rptline};
 
+	logmsg (5, 2, " and I was called by ... ".&whowasi);
+#    logmsg (3, 2, "Starting with rule:$rule & report id:$rptid");
+    logmsg (9, 3, "key: $key");
+ 
 	# generate rpt line based on config spec for line and results.
 	# Sample entry: {x}: logouts from {2} by {1}
+	
+	logmsg (7, 3, "cfghash ... ".Dumper($cfghashref));
+	logmsg (7, 3, "reshash ... ".Dumper($reshashref));
+	my $line = $$cfghashref{line};
+    logmsg (7, 3, "report line: $line");
+  
+  	for ($$cfghashref{cmd})  {
+    	if (/count/i) {
+     		$line =~ s/\{x\}/$$reshashref{count}/;
+     		logmsg(9, 3, "subsituting {x} with $$reshashref{count}");
+    	} elsif (/SUM/i) {
+     		$line =~ s/\{x\}/$$reshashref{total}/;
+     		logmsg(9, 3, "subsituting {x} with $$reshashref{total}");
+     	} elsif (/AVG/i) {
+        	my $avg = $$reshashref{total} / $$reshashref{count};
+        	$avg = sprintf ("%.3f", $avg);
+	    	$line =~ s/\{x\}/$avg/;
+	    	logmsg(9, 3, "subsituting {x} with $avg");
+     	} else {
+     		logmsg (1, 0, "WARNING: Unrecognized cmd ($$cfghashref{cmd}) for report #$rptid in rule ($rule)");
+   		}
+	}
 
-#	profile( whoami(), whowasi() );
-	logmsg (5, 2, " and I was called by ... ".&whowasi);
-    logmsg (3, 2, "Starting with rule:$rule");
-    logmsg (9, 3, "key: $key");
 	my @fields = split /:/, $key;
-
-    logmsg (9, 3, "line: $line");
-    logmsg(9, 3, "subsituting {x} with $$rpthashref{$rule}{$key}{count}");
-	$line =~ s/\{x\}/$$rpthashref{$rule}{$key}{count}/;
-    
-    if ($$cfghashref{rules}{$rule}{cmd} eq "SUM") {
-	    $line =~ s/\{s\}/$$rpthashref{$rule}{$key}{sum}/;
-    }
-    if ($$cfghashref{rules}{$rule}{cmd} eq "AVG") {
-        my $avg = $$rpthashref{$rule}{$key}{sum} / $$reshashref{$rule}{$key}{count};
-        $avg = sprintf ("%.3f", $avg);
-	    $line =~ s/\{a\}/$avg/;
-    }
-
     logmsg (9, 3, "#fields ".($#fields+1)." in @fields");
 	for my $i (0..$#fields) {
 		my $field = $i+1;
@@ -900,6 +942,7 @@ sub rptline {
 			$line =~ s/\{$field\}/$fields[$i]/;
 		}
 	}
+	logmsg (7, 3, "report line is now:$line");
 	return $line;
 }
 
@@ -952,14 +995,16 @@ sub actionrule {
 		my @matrix = getmatchlist($$cfghashref{$rule}{actions}[$actionid]{matches}, 0);
 		my @tmpmatrix = getmatchlist($$cfghashref{$rule}{actions}[$actionid]{matches}, 1); 
 
-    	logmsg (9, 4, ($#tmpmatrix + 1)." entries for matching, using list @tmpmatrix");
+    	logmsg (7, 4, ($#tmpmatrix + 1)." entries for matching, using list @tmpmatrix");
    		my $matchid;
    		my @resmatrix = ();
     	no strict;
     	if ($$cfghashref{$rule}{actions}[$actionid]{regex} =~ /^\!/) {
     		my $regex = $$cfghashref{$rule}{actions}[$actionid]{regex};
-    		$regex =~ s/^!//; 
+    		$regex =~ s/^!//;
+    		logmsg(8, 4, "negative regex - !$regex");
     		if ($$line{ $$cfghashref{$rule}{actions}[$actionid]{field} } !~ /$regex/ ) {
+    			logmsg(8, 5, "line matched regex");
 				for my $val (@tmpmatrix) {
 					push @resmatrix, ${$val};
 					logmsg (9,5, "Adding ${$val} (from match: $val) to matrix");
@@ -967,8 +1012,10 @@ sub actionrule {
 				$matchid = populatematrix(\@resmatrix, $$cfghashref{$rule}{actions}[$actionid]{matches}, $line);
 				$retvalue = 1;
     		}
-    	} else {	
+    	} else {
+    		logmsg(8, 4, "Using regex - $$cfghashref{$rule}{actions}[$actionid]{regex}");	
     		if ($$line{ $$cfghashref{$rule}{actions}[$actionid]{field} } =~ /$$cfghashref{$rule}{actions}[$actionid]{regex}/ ) {
+    			logmsg(8, 5, "line matched regex");
 				for my $val (@tmpmatrix) {
 					push @resmatrix, ${$val};
 					logmsg (9,5, "Adding ${$val} (from match: $val) to matrix");
@@ -980,17 +1027,17 @@ sub actionrule {
     	}
     	use strict;
     	if ($matchid) {
+    		$$reshashref{$rule}{$actionid}{$matchid}{total} += $resmatrix[ $$cfghashref{$rule}{actions}[$actionid]{sourcefield} ];
+    		$$reshashref{$rule}{$actionid}{$matchid}{count}++;
     		for ($$cfghashref{$rule}{actions}[$actionid]{cmd}) {
-    			if (/sum/) {
-    				$$reshashref{$rule}{$actionid}{$matchid} += $resmatrix[ $$cfghashref{$rule}{actions}[$actionid]{sourcefield} ];
-    			} elsif (/count/) {
-    				$$reshashref{$rule}{$actionid}{$matchid}++;	
-    			} elsif (/append/) {
+    			if (/append/i) {
     				
     			} else {
-    				logmsg (1, 0, "Warning: unfrecognized cmd ($$cfghashref{$rule}{actions}[$actionid]{cmd}) in action ($actionid) for rule: $rule");
+    				logmsg (1, 0, "Warning: unrecognized cmd ($$cfghashref{$rule}{actions}[$actionid]{cmd}) in action ($actionid) for rule: $rule");
     			}
     		}
+    	} else {
+    		logmsg (3, 5, "No matchid");
     	}
     }
     logmsg (7, 5, "\%reshash ...".Dumper($reshashref));

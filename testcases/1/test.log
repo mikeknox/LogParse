@@ -1,0 +1,12 @@
+Oct  2 15:00:01 hosta CRON[3836]: pam_unix(cron:session): session opened for user root by (uid=0)
+Oct  2 15:00:02 hosta CRON[3836]: pam_unix(cron:session): session closed for user root
+Oct  2 15:01:19 hosta sudo:     usera : TTY=pts/0 ; PWD=/home/mike/src/LogParse ; USER=root ; COMMAND=/bin/grep ssh /var/log/syslog
+Oct  2 15:01:22 hosta sudo:     usera : TTY=pts/0 ; PWD=/home/mike/src/LogParse ; USER=root ; COMMAND=/bin/grep ssh /var/log/syslog
+Oct  2 15:01:25 hosta sudo:     usera : TTY=pts/0 ; PWD=/home/mike/src/LogParse ; USER=root ; COMMAND=/bin/grep ssh /var/log/messages
+Oct  2 15:01:31 hosta sudo:     userb : TTY=pts/0 ; PWD=/home/mike/src/LogParse ; USER=root ; COMMAND=/bin/grep -i ssh /var/log/messages
+Oct  2 15:01:35 hosta sudo:     userb : TTY=pts/0 ; PWD=/home/mike/src/LogParse ; USER=root ; COMMAND=/bin/grep -i ssh /var/log/apache2 /var/log/apparmor /var/log/apt /var/log/aptitude /var/log/aptitude.1.gz /var/log/auth.log /var/log/auth.log.0 /var/log/auth.log.1.gz /var/log/boot /var/log/btmp /var/log/btmp.1 /var/log/ConsoleKit /var/log/daemon.log /var/log/dbconfig-common /var/log/debug /var/log/dist-upgrade /var/log/dmesg /var/log/dmesg.0 /var/log/dmesg.1.gz /var/log/dmesg.2.gz /var/log/dmesg.3.gz /var/log/dmesg.4.gz /var/log/dpkg.log /var/log/dpkg.log.1 /var/log/dpkg.log.2.gz /var/log/exim4 /var/log/faillog /var/log/fsck /var/log/installer /var/log/kern.log /var/log/landscape /var/log/lastlog /var/log/lpr.log /var/log/mail.err /var/log/mail.info /var/log/mail.log /var/log/mail.warn /var/log/messages /var/log/mysql /var/log/mysql.err /var/log/mysql.log /var/log/mysql.log.1.gz /var/log/news /var/log/pycentral.log /var/log/request-tracker3.6 /var/log/syslog /var/log/syslog
+Oct  2 15:01:35 hosta sudo:     userb : (command continued) /var/log/syslog.1.gz /var/log/syslog.2.gz /var/log/syslog.3.gz /var/log/syslog.4.gz /var/log/syslog.5.gz /var/log/syslog.6.gz /var/log/udev /var/log/user.log /var/log/wtmp /var/log/wtmp.1
+Oct  2 15:02:17 hosta sudo:     userb : TTY=pts/0 ; PWD=/home/mike/src/LogParse ; USER=root ; COMMAND=/usr/bin/head /var/log/auth.log
+Oct  2 15:02:22 hosta sudo:     usera : TTY=pts/0 ; PWD=/home/mike/src/LogParse ; USER=root ; COMMAND=/bin/chown usera auth.log
+Oct  2 15:02:55 hosta sudo:     userb : TTY=pts/0 ; PWD=/home/mike/src/LogParse ; USER=root ; COMMAND=/usr/bin/tail /var/log/auth.log
+Oct  2 15:03:50 hosta sudo:     userb : TTY=pts/0 ; PWD=/home/mike/src/LogParse ; USER=root ; COMMAND=/usr/bin/tail /var/log/auth.log

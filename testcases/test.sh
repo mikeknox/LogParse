@@ -10,9 +10,9 @@ for testcasedir in `ls -dF1 * | grep '/$'`
 do
 	cd $dir/$testcasedir
 	if [ -f ./args ] ; then
-		$1 `cat ./args` > $OUTFILE
+		../../logparse.pl `cat ./args` > $OUTFILE
 	else
-		$1 $DEFAULTARGS > $OUTFILE
+		../../logparse.pl $DEFAULTARGS > $OUTFILE
 	fi
 	diff -u $OUTFILE ./expected.output
 	if test $? -eq 0 ; then

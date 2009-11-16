@@ -1,17 +1,24 @@
 #!/bin/bash
 
-dir=`dirname $0`
+dir="`pwd`/`dirname $0`"
 OUTFILE="/tmp/logparse.test.output"
+DEFAULTARGS=" -l ./test.log -c ./logparse.conf -d 0"
 
-for testcase in `ls -dF1 $dir/* | grep '/$'`
+cd $dir
+
+for testcasedir in `ls -dF1 * | grep '/$'`
 do
-	echo Testcase: $testcase
-	$1 -l $testcase/test.log -c $testcase/logparse.conf -d0 > $OUTFILE
-	diff -u $OUTFILE $testcase/expected.output
-	if test $? -eq 0 ; then
-		echo $testcase passed
+	cd $dir/$testcasedir
+	if [ -f ./args ] ; then
+		$1 `cat ./args` > $OUTFILE
 	else
-		echo $testcase failed
+		$1 $DEFAULTARGS > $OUTFILE
+	fi
+	diff -u $OUTFILE ./expected.output
+	if test $? -eq 0 ; then
+		echo Testcase `echo $testcasedir | sed 's/\///g'` passed
+	else
+		echo Testcase `echo $testcasedir| sed 's/\///g'` failed
 	fi
 	rm $OUTFILE
 done

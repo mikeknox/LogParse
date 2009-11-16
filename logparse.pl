@@ -120,6 +120,8 @@ use Getopt::Std;
 use Data::Dumper qw(Dumper);
 
 # Globals
+#
+my $STARTTIME = time();
 my %profile;
 my $DEBUG = 0;
 my %DEFAULTS = ("CONFIGFILE", "logparse.conf", "SYSLOGFILE", "/var/log/messages" );
@@ -948,12 +950,14 @@ sub logmsg {
     my $level = shift;
     my $indent = shift;
     my $msg = shift;
+	my $time = time() - $STARTTIME;
 
     if ($DEBUG >= $level) {
+		# TODO replace this with a regex so \n can also be matched and multi line (ie Dumper) can be correctly formatted
         for my $i (0..$indent) {
             print STDERR "  ";
         }
-        print STDERR whowasi."(): $msg\n";
+        print STDERR whowasi."(): $time: $msg\n";
     }
 }
 

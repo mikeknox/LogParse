@@ -116,7 +116,7 @@ ACTION <field> </regex/> <{matches}> append <rule> <{field transformation}> [LAS
 
 # expects data on std in
 use strict;
-use Getopt::Std;
+use Getopt::Long;
 use Data::Dumper qw(Dumper);
 
 # Globals
@@ -126,21 +126,31 @@ my %profile;
 my $DEBUG = 0;
 my %DEFAULTS = ("CONFIGFILE", "logparse.conf", "SYSLOGFILE", "/var/log/messages" );
 my %opts;
-my $CONFIGFILE="logparse.conf";
+my @CONFIGFILES;# = ("logparse.conf");
 my %cfghash;
 my %reshash;
 my $UNMATCHEDLINES = 1;
-my $SYSLOGFILE = "/var/log/messages";
+#my $SYSLOGFILE = "/var/log/messages";
+my @LOGFILES;
 my %svrlastline; # hash of the last line per server, excluding 'last message repeated x times'
 
-getopt('cdl', \%opts);
-$DEBUG = $opts{d} if $opts{d};
-$CONFIGFILE = $opts{c} if $opts{c};
-$SYSLOGFILE = $opts{l} if $opts{l};
+#getopt('cdl', \%opts);
+my $result = GetOptions("c|conf=s" => \@CONFIGFILES,
+					"l|log=s" => \@LOGFILES,
+					"d|debug=i" => \$DEBUG
+		);
+@CONFIGFILES = split(/,/,join(',',@CONFIGFILES));
+@LOGFILES = split(/,/,join(',',@LOGFILES));
+unless ($result) {
+	warning ("c", "Invalid  config options passed");
+}
+#$DEBUG = $opts{d} if $opts{d};
+#$CONFIGFILE = $opts{c} if $opts{c};
+#$SYSLOGFILE = $opts{l} if $opts{l};
 
-loadcfg (\%cfghash, $CONFIGFILE);
+loadcfg (\%cfghash, \@CONFIGFILES);
 logmsg(7, 3, "cfghash:".Dumper(\%cfghash));
-processlogfile(\%cfghash, \%reshash, $SYSLOGFILE);
+processlogfile(\%cfghash, \%reshash, \@LOGFILES);
 logmsg (9, 0, "reshash ..\n".Dumper(%reshash));
 report(\%cfghash, \%reshash);
 
@@ -190,14 +200,16 @@ sub parselogline {
 sub processlogfile {
 	my $cfghashref = shift;
 	my $reshashref = shift;
-	my $logfile = shift;
+	my $logfileref = shift;
 
 	my $format = $$cfghashref{FORMAT}{default}; # TODO - make dynamic
 	my %lastline;
 	
-	logmsg(1, 0, "processing $logfile using format $format...");
 	logmsg(5, 1, " and I was called by ... ".&whowasi);
-	open (LOGFILE, "<$logfile") or die "Unable to open $SYSLOGFILE for reading...";
+	logmsg(5, 1, "Processing logfiles: ".Dumper($logfileref));
+	foreach my $logfile (@$logfileref) {
+		logmsg(1, 0, "processing $logfile using format $format...");
+	open (LOGFILE, "<$logfile") or die "Unable to open $logfile for reading...";
 	while (<LOGFILE>) {
 		my $facility = "";
 		my %line;
@@ -260,7 +272,9 @@ sub processlogfile {
 		logmsg(9 ,1, "Results hash ...".Dumper(%$reshashref) );
 		logmsg (5, 1, "finished processing line");
 	}
+		close LOGFILE;
 	logmsg (1, 0, "Finished processing $logfile.");
+	} # loop through logfiles
 }
 
 sub getparameter {
@@ -336,8 +350,9 @@ sub loadcfg {
 	- brace counts are used to determine whether we've finished a stanza	
 =cut
 	my $cfghashref = shift;
-	my $cfgfile = shift;
+	my $cfgfileref = shift;
 
+	foreach my $cfgfile (@$cfgfileref) {
 	open (CFGFILE, "<$cfgfile");
 
 	logmsg(1, 0, "Loading cfg from $cfgfile");
@@ -397,9 +412,9 @@ sub loadcfg {
 		} # for cmd
 	} # while
 	close CFGFILE;
-	logmsg (5, 1, "Config Hash contents:");
-	&Dumper( %$cfghashref );
-	logmsg (1, 0, "finished processing cfg: $cfgfile");
+		logmsg (1, 0, "finished processing cfg: $cfgfile");
+	}
+	logmsg (5, 1, "Config Hash contents: ...".Dumper($cfghashref));
 } # sub loadcfg
 
 sub setaction {

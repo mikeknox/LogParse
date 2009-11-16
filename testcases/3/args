@@ -1,0 +1,1 @@
+-l ./test.log.1,./test.log.2 -c ./logparse.conf.1,./logparse.conf.2 -d 0

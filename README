@@ -13,25 +13,101 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Describe config file for log parse / summary engine
-# Input fields from syslog:
-# Date, time, server, application, facility, ID, message
-#
-# Config line
-# /server regex/, /app regex/, /facility regex/, /msg regex/, $ACTIONS
-# Summaries are required at various levels, from total instances to total sizes to server summaries.
-# ACTIONS:
-# COUNT - Just list the total number of matches
-# SUM[x] - Report the sum of field x of all matches
-# SUM[x], /regex/ - Apply regex to msg field of matches and report the sum of field x from that regex
-# SUM[x], /regex/, {y,z} - Apply regex to msg field of matches and report the sum of field x from that regex for fields y & z
-# AVG[x], /regex/, {y,z} - Apply regex to msg field of matches and report the average of field x from that regex for fields y & z
-# COUNT[x], /regex/, {y,z} - Apply regex to msg field of matches and report the count of field x from that regex for matching fields y & z
-#
-# Report
-# Line {x} - count
-#       {a} - average
-#       {s} - sum
-#       {1} {2} etc - field #'s from the match line in the cmd segement
-#
-# Each entry can test or regex, if text interpret as regex /^string$/
+This Perl script was developed to analyse and sumamrise logfiles. The original version was hardcoded for syslog formated logfiles.
+The new version (this one), has a number of significant changes:
+1. Specify the logfile format in the config file
+2. Multiple log and config files specified on command line
+3. Multiple actions & reports for each rule
+4. The arithmetic reporting functions have been moved from ACTION's to REPORT's.
+
+Command line args
+./logparse.pl -l <log file> -c <config file> [-d <debug level>]
+<debug level> is 0 -> 9, 0 no debug, 9 extremely verbose.
+
+Config file 
+Any content following a # is regarded as a comment
+
+** Format's **
+
+Log file format are described with the following notation ...
+FORMAT <format name> {
+	FIELDS 2 \t
+	FIELD 1 abc
+	FIELD 2 def
+}
+
+This format stanza tells logparse.pl that the logfile has 2 fields which are tablimited. Rules can then refer to field 1 as 'abc' and field 2 as 'def'
+
+Subfields can also be defined, for instance:
+FORMAT <format name> {
+	FIELDS 2 \t
+	FIELD 1 abc
+	FIELD 2 def
+	FIELDS 2-3 /\d+/
+	FIELD 2-1 mno
+	FIELD 2-2 pqr default
+	FIELD 2-3 stu
+	LASTLINEINDEX def
+}
+
+Field 2 is then broken up into 3 fields using the regex /\d+/, and these fields are then available as 'mno', 'pqr' and 'stu'. The original field 2 is still available as 'def'.
+Also if the regex could not be applied to the line, the 'default' parameter on FIELD 2-2 means that the contents of FIELD 2 will also be in FIELD 2-2. If the default parameter is not used, the field content would have been put in FIELD 2-1.
+
+The other parameter shown is 'LASTLINEINDEX'. This parameter is used to key a index of the previous lines based on the field specified by 'LASTLINEINDEX'. A hash of previous lines is stored, and key based on this field.
+
+There's  a final parameter, 'default'. This tells logparse to use this format when processing logifles, unless it's told to use a differnet format.
+The ability to use multiple format's in the same run however, is yet to be implemented.
+
+** Rule's **
+This is where you can generate your reports and statistics for the log files.
+
+RULE [<sample rule name>] {
+	FIELDNAME /regex/
+	ACTION <FIELDNAME> <regex> {FIELD LIST}
+}
+
+rule name is optional. If it's not specified an incremnting integer is used for the name. It is recommended to use names however as this makes it a lot easier to use the 'APPEND' argument for ACTIONS.
+
+There are 3 sections to a rule command, field filters, ACTION's and REPORT's.
+If a line doesn't start with ACTION or REPORT, it is assumed to be a field filter.
+The first argument is used as the field label (eg 'abc', or field 1 as defined in the sample format above).
+The second argument is used as a regex against the specified field.
+If the field doesn't match the regex then no further attempts to match the current rule are attempted for the current line.
+Regex's can be prefixed by !, in which case a negative match is made. eg If the command is abc /!456/, then only the lines where field abc do not contain 456 will be processed for ACTIONS or REPORTS.
+Field matches are treated as a single series of logical AND's, any fails, and the ACTION's and REPORT's will not be processed for that rule for the specific line.
+
+If the FIELD matches all pass, then all the ACTION's are applied.
+After all the logfiles are processed the REPORT commands are then processed.
+
+* ACTION's *
+formats:
+	ACTION <FIELDNAME> <regex> {FIELD LIST} 
+	ACTION <FIELDNAME> <regex> IGNORE
+eg.
+ACTION MSG /(.*): TTY=(.*) ; PWD=(.*); USER=(.*); COMMAND=(.*)/ {HOST, 1, 4, 5}
+
+regex is applied to	FIELDNAME, and the the matching fields are stored according to {FIELD LIST}.
+FIELD LIST can include FIELDNAMES (generally HOST), the field list is a numerical list of the matches in the regex which are kept for processing by REPORT commands.
+In the above example HOST, the 1st, 4th (USER) and 5th (COMMAND) match are kept for processing.
+
+Data from multiple ACTION's in the same rule is stored seperately, but RULE's for that rule look at the combined data set (data from all ACTION's).
+
+* REPORT's *
+format:
+	REPORT <title> <summary> [action]
+	action could be: count, total, avg etc
+eg.
+	REPORT "Sudo Usage" "{2} ran {4} as {3} on {1}: {x} times" count
+This will generate report title "Sudo Usage", and each entry in the report is set by <sumamry>. They are keyed based on the field's in <summary>. The field numbers in <summary> are relative to the data collected in ACTION's.
+By default report's are count's, ie the total number of instances which match the key's in <summary>.
+{x} in <summary> is the count.
+
+To continue this example ...
+	ACTION MSG /(.*): TTY=(.*) ; PWD=(.*); USER=(.*); COMMAND=(.*)/ {HOST, 1, 4, 5}
+	REPORT "Sudo Usage" "{2} ran {4} as {3} on {1}: {x} times" count
+
+The REPORT titled "Sudo Usage", contains a count of lines similiar to ...
+<USER> ran <command> as <TARGET USER> on <HOST>: <count> times
+
+REPORT's use data combined from all ACTION's, so multiple ACTION's generally replace the APPEND command from the original version.
+

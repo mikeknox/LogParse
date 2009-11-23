@@ -147,13 +147,13 @@ unless ($result) {
 #$SYSLOGFILE = $opts{l} if $opts{l};
 
 loadcfg (\%cfghash, \@CONFIGFILES);
-logmsg(7, 3, "cfghash:".Dumper(\%cfghash));
+logmsg(7, 3, "cfghash:", \%cfghash);
 processlogfile(\%cfghash, \%reshash, \@LOGFILES);
-logmsg (9, 0, "reshash ..\n".Dumper(%reshash));
+logmsg (9, 0, "reshash ..\n", %reshash);
 report(\%cfghash, \%reshash);
 
-logmsg (9, 0, "reshash ..\n".Dumper(%reshash));
-logmsg (9, 0, "cfghash ..\n".Dumper(%cfghash));
+logmsg (9, 0, "reshash ..\n", %reshash);
+logmsg (9, 0, "cfghash ..\n", %cfghash);
 
 exit 0;
 
@@ -182,7 +182,7 @@ sub parselogline {
 	} else {
 		(@tmp) = split (/$$cfghashref{delimiter}/, $text, $$cfghashref{totalfields});
 	
-		logmsg (9, 4, "Got field values ... ".Dumper(@tmp));
+		logmsg (9, 4, "Got field values ... ", \@tmp);
 		for (my $i = 0; $i <= $#tmp+1; $i++) {
 			$$linehashref{ $$cfghashref{byindex}{$i} } = $tmp[$i];
 			logmsg(9, 4, "Checking field $i(".($i+1).")");
@@ -192,7 +192,7 @@ sub parselogline {
 			}
 		}
 	}
-	logmsg (9, 4, "line results now ...".Dumper($linehashref));
+	logmsg (9, 4, "line results now ...", $linehashref);
 }
 
 sub processlogfile {
@@ -204,74 +204,75 @@ sub processlogfile {
 	my %lastline;
 	
 	logmsg(5, 1, " and I was called by ... ".&whowasi);
-	logmsg(5, 1, "Processing logfiles: ".Dumper($logfileref));
+	logmsg(5, 1, "Processing logfiles: ", $logfileref);
 	foreach my $logfile (@$logfileref) {
 		logmsg(1, 0, "processing $logfile using format $format...");
-	open (LOGFILE, "<$logfile") or die "Unable to open $logfile for reading...";
-	while (<LOGFILE>) {
-		my $facility = "";
-		my %line;
-		# Placing line and line componenents into a hash to be passed to actrule, components can then be refered
-		# to in action lines, ie {svr} instead of trying to create regexs to collect individual bits
-		$line{line} = $_;
+		
+		open (LOGFILE, "<$logfile") or die "Unable to open $logfile for reading...";
+		while (<LOGFILE>) {
+			my $facility = "";
+			my %line;
+			# Placing line and line componenents into a hash to be passed to actrule, components can then be refered
+			# to in action lines, ie {svr} instead of trying to create regexs to collect individual bits
+			$line{line} = $_;
 
-    	logmsg(5, 1, "Processing next line");
-    	logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");
-    	logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
+    		logmsg(5, 1, "Processing next line");
+    		logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");
+    		logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
 
-    	parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $line{line}, \%line);
+    		parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $line{line}, \%line);
     	
-		logmsg(9, 1, "Checking line: $line{line}");
-		logmsg(9, 2, "Extracted Field contents ...\n".Dumper(@{$line{fields}}));
+			logmsg(9, 1, "Checking line: $line{line}");
+			logmsg(9, 2, "Extracted Field contents ...\n", \@{$line{fields}});
 		
-		my %rules = matchrules(\%{ $$cfghashref{RULE} }, \%line );
-		logmsg(9, 2, keys (%rules)." matches so far");
+			my %rules = matchrules(\%{ $$cfghashref{RULE} }, \%line );
+			logmsg(9, 2, keys (%rules)." matches so far");
 
-#TODO Handle "Message repeated" type scenarios when we don't know which field should contatin the msg
-#UP to here	
-		# FORMAT stanza contains a substanza which describes repeat for the given format
-		# format{repeat}{cmd} - normally regex, not sure what other solutions would apply
-		# format{repeat}{regex} - array of regex's hashes
-		# format{repeat}{field} - the name of the field to apply the cmd (normally regex) to
+			#TODO Handle "Message repeated" type scenarios when we don't know which field should contatin the msg
+			#UP to here	
+			# FORMAT stanza contains a substanza which describes repeat for the given format
+			# format{repeat}{cmd} - normally regex, not sure what other solutions would apply
+			# format{repeat}{regex} - array of regex's hashes
+			# format{repeat}{field} - the name of the field to apply the cmd (normally regex) to
 		
-		#TODO describe matching of multiple fields ie in syslog we want to match regex and also ensure that HOST matches previous previousline
-		# Detect and count repeats
-	    if (keys %rules >= 0) {
-			logmsg (5, 2, "matched ".keys(%rules)." rules from line $line{line}");
+			#TODO describe matching of multiple fields ie in syslog we want to match regex and also ensure that HOST matches previous previousline
+			# Detect and count repeats
+	    	if (keys %rules >= 0) {
+				logmsg (5, 2, "matched ".keys(%rules)." rules from line $line{line}");
 
-		    # loop through matching rules and collect data as defined in the ACTIONS section of %config
-		    my $actrule = 0;
-            my %tmprules = %rules;
-		    for my $rule (keys %tmprules) {
-		    	logmsg (9, 3, "checking rule: $rule");
-				my $execruleret = 0;
-				if (exists($$cfghashref{RULE}{$rule}{actions} ) ) {
-		    		$execruleret = execrule(\@{ $$cfghashref{RULE}{$rule}{actions} }, $reshashref, $rule, \%line);
-				} else {
-					logmsg (2, 3, "No actions defined for rule; $rule");
-				}
-		    	logmsg (9, 4, "execrule returning $execruleret");
-			    delete $rules{$rule} unless $execruleret;
-			 # TODO: update &actionrule();
-		    }
-			logmsg (9, 3, "#rules in list .., ".keys(%rules) );
-			logmsg (9, 3, "\%rules ..".Dumper(%rules));
-		    $$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} if keys(%rules) == 0;
-		    # lastline & repeat
-	    } # rules > 0
-		if (exists( $lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } ) ) {
-			delete ($lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } });
-		}
-		$lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } = %line;
+		    	# loop through matching rules and collect data as defined in the ACTIONS section of %config
+		    	my $actrule = 0;
+            	my %tmprules = %rules;
+		    	for my $rule (keys %tmprules) {
+		    		logmsg (9, 3, "checking rule: $rule");
+					my $execruleret = 0;
+					if (exists($$cfghashref{RULE}{$rule}{actions} ) ) {
+		    			$execruleret = execrule(\@{ $$cfghashref{RULE}{$rule}{actions} }, $reshashref, $rule, \%line);
+					} else {
+						logmsg (2, 3, "No actions defined for rule; $rule");
+					}
+		    		logmsg (9, 4, "execrule returning $execruleret");
+			    	delete $rules{$rule} unless $execruleret;
+			 	# TODO: update &actionrule();
+		    	}
+				logmsg (9, 3, "#rules in list .., ".keys(%rules) );
+				logmsg (9, 3, "\%rules ..", \%rules);
+		    	$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} if keys(%rules) == 0;
+		    	# lastline & repeat
+	    	} # rules > 0
+			if (exists( $lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } ) ) {
+				delete ($lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } });
+			}
+			$lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } = %line;
 
-		if ( keys(%rules) == 0) {
-			# Add new unmatched linescode				
+			if ( keys(%rules) == 0) {
+				# Add new unmatched linescode				
+			}
+			logmsg(9 ,1, "Results hash ...", \%$reshashref );
+			logmsg (5, 1, "finished processing line");
 		}
-		logmsg(9 ,1, "Results hash ...".Dumper(%$reshashref) );
-		logmsg (5, 1, "finished processing line");
-	}
 		close LOGFILE;
-	logmsg (1, 0, "Finished processing $logfile.");
+		logmsg (1, 0, "Finished processing $logfile.");
 	} # loop through logfiles
 }
 
@@ -306,11 +307,12 @@ lines are whitespace delimited, except when contained within " ", {} or //
 	return @A;
 }
 
+=depricate
 sub parsecfgline {
 =head6 parsecfgline($line)
 Depricated, use getparameter()
 takes line as arg, and returns array of cmd and value (arg)
-=cut
+#=cut
 	my $line = shift;
 
 	logmsg (5, 3, " and I was called by ... ".&whowasi);
@@ -335,6 +337,7 @@ takes line as arg, and returns array of cmd and value (arg)
 	logmsg (6, 3, "returning cmd: $cmd arg: $arg");
 	return ($cmd, $arg);
 }
+=cut
 
 sub loadcfg {
 =head6 loadcfg(<cfghashref>, <cfgfile name>)
@@ -412,7 +415,7 @@ sub loadcfg {
 	close CFGFILE;
 		logmsg (1, 0, "finished processing cfg: $cfgfile");
 	}
-	logmsg (5, 1, "Config Hash contents: ...".Dumper($cfghashref));
+	logmsg (5, 1, "Config Hash contents: ...", $cfghashref);
 } # sub loadcfg
 
 sub setaction {
@@ -426,8 +429,8 @@ ACTION MSG /(.*): TTY=(.*) ; PWD=(.*); USER=(.*); COMMAND=(.*)/ {HOST, 1, 4, 5} 
 	my $argsref = shift;
 
 	logmsg (5, 4, " and I was called by ... ".&whowasi);
-	logmsg (6, 5, "args passed: ".Dumper(@$argsref));
-	logmsg (6, 5, "Actions so far .. ".Dumper($actionref));
+	logmsg (6, 5, "args passed: ", $argsref);
+	logmsg (6, 5, "Actions so far .. ", $actionref);
 
 	no strict;
 	my $actionindex = $#{$actionref}+1;
@@ -474,7 +477,7 @@ ACTION MSG /(.*): TTY=(.*) ; PWD=(.*); USER=(.*); COMMAND=(.*)/ {HOST, 1, 4, 5} 
 		$$actionref[$actionindex]{lastline} = 1; 
 	}
 	
-	logmsg(5, 5, "action[$actionindex] for rule is now .. ".Dumper(%{ $$actionref[$actionindex] } ) );
+	logmsg(5, 5, "action[$actionindex] for rule is now .. ", \%{ $$actionref[$actionindex] } );
 	#$$actionref[$actionindex]{cmd} = $$argsref[4];
 }
 
@@ -488,7 +491,7 @@ REPORT "Sudo Usage" "{2} ran {4} as {3} on {1}: {x} times"
 	my $argsref = shift;
 
 	logmsg (5, 4, " and I was called by ... ".&whowasi);
-	logmsg (6, 5, "args: ".Dumper(@$argsref));
+	logmsg (6, 5, "args: ", $argsref);
 	logmsg (9, 5, "args: $$argsref[2]");
 	no strict;	
 	
@@ -498,8 +501,17 @@ REPORT "Sudo Usage" "{2} ran {4} as {3} on {1}: {x} times"
 	
 	$$reportref[$reportindex]{title} = $$argsref[1];
 	$$reportref[$reportindex]{line} = $$argsref[2];
-	if ($$argsref[3]) {
-		$$reportref[$reportindex]{cmd} = $$argsref[3];	
+
+	if ($$argsref[3] and $$argsref[3] =~ /^\/|\d+/) {
+		logmsg(9,3, "report field regex: $$argsref[3]");
+		($$reportref[$reportindex]{field}, $$reportref[$reportindex]{regex} ) = split (/=/, $$argsref[3], 2);
+		#$$reportref[$reportindex]{regex} = $$argsref[3];
+	}
+
+	if ($$argsref[3] and $$argsref[3] !~ /^\/|\d+/) {
+		$$reportref[$reportindex]{cmd} = $$argsref[3];
+	} elsif ($$argsref[4] and $$argsref[4] !~ /^\/|\d+/) {
+		$$reportref[$reportindex]{cmd} = $$argsref[4];	
 	} else {
 		$$reportref[$reportindex]{cmd} = "count";
 	}
@@ -521,7 +533,7 @@ FIELDS 6 /\w+/
 	my $argsref = shift;
 
 	logmsg (5, 4, " and I was called by ... ".&whowasi);
-	logmsg (6, 5, "args: ".Dumper(@$argsref));
+	logmsg (6, 5, "args: ", $argsref);
 	logmsg (9, 5, "fieldindex: $$argsref[1] fieldname $$argsref[2]");
 	logmsg (9, 5, "fieldcount: $$argsref[1]");
 	if ($$argsref[1] =~ /^(\d+)-(.*)$/ ) {
@@ -552,7 +564,7 @@ Passed @args - array of entires for config line
 	my $argsref = shift;
 
 	logmsg (5, 4, " and I was called by ... ".&whowasi);
-	logmsg (6, 5, "args: ".Dumper(@$argsref));
+	logmsg (6, 5, "args: ", $argsref);
 	logmsg (9, 5, "fieldindex: $$argsref[1] fieldname $$argsref[2]");
 	if ($$argsref[1] =~ /^(\d+)-(.*)$/ ) {
 		# this is an infinite loop, need to rectify
@@ -580,7 +592,7 @@ sub report {
 	logmsg(1, 0, "Runing report");
 	logmsg (5, 0, " and I was called by ... ".&whowasi);
 
-	logmsg(5, 1, "Dump of results hash ...".Dumper($reshashref));
+	logmsg(5, 1, "Dump of results hash ...", $reshashref);
 
 	print "\n\nNo match for lines:\n";
 	if (exists ($$reshashref{nomatch}) ) {
@@ -596,7 +608,7 @@ sub report {
 			for my $rptid (0 .. $#{ $$cfghashref{RULE}{$rule}{reports} } ) {
 				my %ruleresults = summariseresults(\%{ $$cfghashref{RULE}{$rule} }, \%{ $$reshashref{$rule} });
 				logmsg (4, 1, "Rule[rptid]: $rule\[$rptid\]");
-				logmsg (5, 2, "\%ruleresults ... ".Dumper(%ruleresults));
+				logmsg (5, 2, "\%ruleresults ... ", \%ruleresults);
 				if (exists ($$cfghashref{RULE}{$rule}{reports}[$rptid]{title} ) ) {
 					print "$$cfghashref{RULE}{$rule}{reports}[$rptid]{title}\n";
 				} else {
@@ -606,7 +618,7 @@ sub report {
 				for my $key (keys %{$ruleresults{$rptid} }) {
 					logmsg (5, 3, "key:$key");
 					if (exists ($$cfghashref{RULE}{$rule}{reports}[$rptid]{line})) {
-						print "\t".rptline(\% {$$cfghashref{RULE}{$rule}{reports}[$rptid] }, \%{$ruleresults{$rptid} }, $rule, $rptid, $key)."\n";
+						print rptline(\% {$$cfghashref{RULE}{$rule}{reports}[$rptid] }, \%{$ruleresults{$rptid} }, $rule, $rptid, $key);
 					} else {
 						print "\t$$reshashref{$rule}{$key}: $key\n";
 					}
@@ -629,10 +641,20 @@ sub summariseresults {
 	for my $actionid (keys( %$reshashref ) ) {
 		for my $key (keys %{ $$reshashref{$actionid} } ) {
 			(my @values) = split (/:/, $key);
-			logmsg (9, 5, "values from key($key) ... @values");
+            logmsg (9, 5, "values from key($key) ... @values");
+
 			for my $rptid (0 .. $#{ $$cfghashref{reports} }) {
+				if (exists($$cfghashref{reports}[$rptid]{field})) {
+					logmsg (9, 4, "Checking to see if field($$cfghashref{reports}[$rptid]{field}) in the results matches $$cfghashref{reports}[$rptid]{regex}");
+					if ($values[$$cfghashref{reports}[$rptid]{field} - 1] =~ /$$cfghashref{reports}[$rptid]{regex}/) {
+						logmsg(9, 5, $values[$$cfghashref{reports}[$rptid]{field} - 1]." is a match.");
+					} else {
+						logmsg(9, 5, $values[$$cfghashref{reports}[$rptid]{field} - 1]." isn't a match.");
+						next;
+					}
+				}
 				(my @targetfieldids) = $$cfghashref{reports}[$rptid]{line} =~ /(\d+?)/g;
-				logmsg (9, 5, "targetfields (from $$cfghashref{reports}[$rptid]{line})... ".Dumper(@targetfieldids));
+				logmsg (9, 5, "targetfields (from $$cfghashref{reports}[$rptid]{line})... ", \@targetfieldids);
 				
 				my $targetkeymatch;# my $targetid;
 				# create key using only fieldids required for rptline
@@ -646,7 +668,7 @@ sub summariseresults {
 						logmsg(9, 7, "fieldid: $fieldid occured in @targetfieldids, adding $values[$resfieldid] to \$targetkeymatch");
 					} else {
 						$targetkeymatch .= ":.*?";
-						logmsg(9, 7, "fieldid: $fieldid doesn't in @targetfieldids, adding wildcard to \$targetkeymatch");
+						logmsg(9, 7, "fieldid: $fieldid wasn't listed in @targetfieldids, adding wildcard to \$targetkeymatch");
 					}
 				}
 				$targetkeymatch =~ s/^://;
@@ -679,9 +701,9 @@ sub rptline {
 	# generate rpt line based on config spec for line and results.
 	# Sample entry: {x}: logouts from {2} by {1}
 	
-	logmsg (7, 3, "cfghash ... ".Dumper($cfghashref));
-	logmsg (7, 3, "reshash ... ".Dumper($reshashref));
-	my $line = $$cfghashref{line};
+	logmsg (7, 3, "cfghash ... ", $cfghashref);
+	logmsg (7, 3, "reshash ... ", $reshashref);
+	my $line = "\t".$$cfghashref{line};
     logmsg (7, 3, "report line: $line");
   
   	for ($$cfghashref{cmd})  {
@@ -710,6 +732,17 @@ sub rptline {
 			$line =~ s/\{$field\}/$fields[$i]/;
 		}
 	}
+
+	$line.="\n";
+
+	#if (exists($$cfghashref{field})) {
+		#logmsg (9, 4, "Checking to see if field($$cfghashref{field}) in the results matches $$cfghashref{regex}");
+		#if ($fields[$$cfghashref{field} - 1] =~ /$$cfghashref{regex}/) {
+			#logmsg(9, 5, $fields[$$cfghashref{field} - 1]." is a match.");
+			#$line = "";
+		#}
+	#}
+
 	logmsg (7, 3, "report line is now:$line");
 	return $line;
 }
@@ -758,7 +791,7 @@ sub execaction {
 	} else {
     	logmsg (7, 5, ($#tmpmatrix + 1)." entries for matching, using list @tmpmatrix");
 	}
-	logmsg (9, 6, "rule spec: ".Dumper($cfghashref));
+	logmsg (9, 6, "rule spec: ", $cfghashref);
     my $retval = 0;
    	my $matchid;
    	my @resmatrix = ();
@@ -808,7 +841,7 @@ sub execaction {
     		}
 				}
     	} else {
-			logmsg(1, 5, "hmmm, no cmd set for rule ($rule)'s actionid: $actionid. The cfghashref data is .. ".Dumper($cfghashref));
+			logmsg(1, 5, "hmmm, no cmd set for rule ($rule)'s actionid: $actionid. The cfghashref data is .. ", $cfghashref);
 		}
     }	
    	logmsg (7, 5, "returning: $retval");
@@ -831,7 +864,7 @@ sub execrule {
     logmsg (6, 3, "rule: $rule called for $$line{line}");
     
     logmsg (9, 3, (@$cfghashref)." actions for rule: $rule");
-	logmsg (9, 3, "cfghashref .. ".Dumper(@$cfghashref));
+	logmsg (9, 3, "cfghashref .. ", $cfghashref);
     for my $actionid ( 0 .. (@$cfghashref - 1) ) {
     	logmsg (6, 4, "Processing action[$actionid]");
     	# actionid needs to recorded in resultsref as well as ruleid
@@ -843,7 +876,7 @@ sub execrule {
 	}
 
     }
-    logmsg (7, 2, "After checking all actions for this rule; \%reshash ...".Dumper($reshashref));
+    logmsg (7, 2, "After checking all actions for this rule; \%reshash ...", $reshashref);
     
     return $retval;
 }
@@ -856,12 +889,12 @@ sub populatematrix {
 	my $lineref = shift; # hash passed by ref, DO NOT mod
 	my $matchid;
 	
-	logmsg (9, 5, "\@resmatrix ... ".Dumper($resmatrixref) );
+	logmsg (9, 5, "\@resmatrix ... ", $resmatrixref) ;
 	
 	my @matrix = getmatchlist($matchlist, 0);
 	my @tmpmatrix = getmatchlist($matchlist, 1); 
-	logmsg (9, 6, "\@matrix ..".Dumper(@matrix));
-	logmsg (9, 6, "\@tmpmatrix ..".Dumper(@tmpmatrix));
+	logmsg (9, 6, "\@matrix ..", \@matrix);
+	logmsg (9, 6, "\@tmpmatrix ..", \@tmpmatrix);
 	
 	my $tmpcount = 0;
 	for my $i (0 .. $#matrix) {
@@ -963,12 +996,17 @@ sub logmsg {
     my $level = shift;
     my $indent = shift;
     my $msg = shift;
+	my $dumpvar = shift;
 
     if ($DEBUG >= $level) {
         for my $i (0..$indent) {
             print STDERR "  ";
         }
-        print STDERR whowasi."(): $msg\n";
+        print STDERR whowasi."(): $msg";
+		if ($dumpvar) {
+			print STDERR Dumper($dumpvar);
+		}
+		print STDERR "\n";
     }
 }
 

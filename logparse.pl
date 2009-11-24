@@ -729,7 +729,7 @@ sub rptline {
     logmsg (9, 3, "#fields ".($#fields+1)." in @fields");
 	for my $i (0..$#fields) {
 		my $field = $i+1;
-        logmsg (9, 4, "$fields[$field] = $fields[$i]");
+        logmsg (9, 4, "Settting \$fields[$field] ($fields[$field]) = \$fields[$i] ($fields[$i])");
 		if ($line =~ /\{$field\}/) {
 			$line =~ s/\{$field\}/$fields[$i]/;
 		}
@@ -1006,7 +1006,7 @@ sub logmsg {
         for my $i (0..$indent) {
             print STDERR "  ";
         }
-        print STDERR whowasi."(): $time: ";
+        print STDERR whowasi."(): $time: $msg";
 		if ($dumpvar) {
 			print STDERR Dumper($dumpvar);
 		}

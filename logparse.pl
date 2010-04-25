@@ -130,23 +130,27 @@ my @CONFIGFILES;# = ("logparse.conf");
 my %cfghash;
 my %reshash;
 my $UNMATCHEDLINES = 1;
-#my $SYSLOGFILE = "/var/log/messages";
 my @LOGFILES;
 my %svrlastline; # hash of the last line per server, excluding 'last message repeated x times'
+my $MATCH; # Only lines matching this regex will be parsed
 
-#getopt('cdl', \%opts);
 my $result = GetOptions("c|conf=s" => \@CONFIGFILES,
 					"l|log=s" => \@LOGFILES,
-					"d|debug=i" => \$DEBUG
+					"d|debug=i" => \$DEBUG,
+					"m|match=s" => \$MATCH
 		);
+
+unless ($result) {
+	warning ("c", "Usage: logparse.pl -c <config file> -l <log file> [-d <debug level>]\nInvalid  config options passed");
+}
+
 @CONFIGFILES = split(/,/,join(',',@CONFIGFILES));
 @LOGFILES = split(/,/,join(',',@LOGFILES));
-unless ($result) {
-	warning ("c", "Invalid  config options passed");
+if ($MATCH) {
+	$MATCH =~ s/\^\"//;
+	$MATCH =~ s/\"$//;
+	logmsg (2, 3, "Skipping lines which match $MATCH");
 }
-#$DEBUG = $opts{d} if $opts{d};
-#$CONFIGFILE = $opts{c} if $opts{c};
-#$SYSLOGFILE = $opts{l} if $opts{l};
 
 loadcfg (\%cfghash, \@CONFIGFILES);
 logmsg(7, 3, "cfghash:", \%cfghash);
@@ -156,6 +160,7 @@ report(\%cfghash, \%reshash);
 
 logmsg (9, 0, "reshash ..\n", %reshash);
 logmsg (9, 0, "cfghash ..\n", %cfghash);
+
 
 exit 0;
 
@@ -175,7 +180,7 @@ sub parselogline {
 	logmsg (6, 4, "defaultfield: $$cfghashref{defaultfield} ($$cfghashref{byindex}{ $$cfghashref{defaultfield} })") if exists ($$cfghashref{defaultfield}); 
 	# if delimiter is not present and default field is set
 	if ($text !~ /$$cfghashref{delimiter}/ and $$cfghashref{defaultfield}) {
-		logmsg (5, 4, "\$text doesnot contain $$cfghashref{delimiter} and default of field $$cfghashref{defaultfield} is set, so assigning all of \$text to that field ($$cfghashref{byindex}{ $$cfghashref{defaultfield} })");
+		logmsg (5, 4, "\$text does not contain $$cfghashref{delimiter} and default of field $$cfghashref{defaultfield} is set, so assigning all of \$text to that field ($$cfghashref{byindex}{ $$cfghashref{defaultfield} })");
 		$$linehashref{ $$cfghashref{byindex}{ $$cfghashref{defaultfield} } } = $text;
 		if (exists($$cfghashref{ $$cfghashref{byindex}{ $$cfghashref{defaultfield} } } ) ) {
 			logmsg(9, 4, "Recurisive call for field ($$cfghashref{default}) with text $text");
@@ -221,14 +226,16 @@ sub processlogfile {
     		logmsg(5, 1, "Processing next line");
     		logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");
     		logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
+			#logmsg(5, 1, "skipping as line doesn't match the match regex") and 
 
     		parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $line{line}, \%line);
     	
 			logmsg(9, 1, "Checking line: $line{line}");
 			logmsg(9, 2, "Extracted Field contents ...\n", \@{$line{fields}});
 		
-			my %rules = matchrules(\%{ $$cfghashref{RULE} }, \%line );
-			logmsg(9, 2, keys (%rules)." matches so far");
+			if ($line{line} =~ /$MATCH/) {
+				my %rules = matchrules(\%{ $$cfghashref{RULE} }, \%line );
+				logmsg(9, 2, keys (%rules)." matches so far");
 
 			#TODO Handle "Message repeated" type scenarios when we don't know which field should contatin the msg
 			#UP to here	
@@ -239,36 +246,39 @@ sub processlogfile {
 		
 			#TODO describe matching of multiple fields ie in syslog we want to match regex and also ensure that HOST matches previous previousline
 			# Detect and count repeats
-	    	if (keys %rules >= 0) {
-				logmsg (5, 2, "matched ".keys(%rules)." rules from line $line{line}");
+	    		if (keys %rules >= 0) {
+					logmsg (5, 2, "matched ".keys(%rules)." rules from line $line{line}");
 
 		    	# loop through matching rules and collect data as defined in the ACTIONS section of %config
-		    	my $actrule = 0;
-            	my %tmprules = %rules;
-		    	for my $rule (keys %tmprules) {
-		    		logmsg (9, 3, "checking rule: $rule");
-					my $execruleret = 0;
-					if (exists($$cfghashref{RULE}{$rule}{actions} ) ) {
-		    			$execruleret = execrule(\@{ $$cfghashref{RULE}{$rule}{actions} }, $reshashref, $rule, \%line);
-					} else {
-						logmsg (2, 3, "No actions defined for rule; $rule");
-					}
-		    		logmsg (9, 4, "execrule returning $execruleret");
-			    	delete $rules{$rule} unless $execruleret;
-			 	# TODO: update &actionrule();
-		    	}
-				logmsg (9, 3, "#rules in list .., ".keys(%rules) );
-				logmsg (9, 3, "\%rules ..", \%rules);
-		    	$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} if keys(%rules) == 0;
-		    	# lastline & repeat
-	    	} # rules > 0
-			if (exists( $lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } ) ) {
-				delete ($lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } });
-			}
-			$lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } = %line;
+		    		my $actrule = 0;
+            		my %tmprules = %rules;
+		    		for my $rule (keys %tmprules) {
+		    			logmsg (9, 3, "checking rule: $rule");
+						my $execruleret = 0;
+						if (exists($$cfghashref{RULE}{$rule}{actions} ) ) {
+		    				$execruleret = execrule(\@{ $$cfghashref{RULE}{$rule}{actions} }, $reshashref, $rule, \%line);
+						} else {
+							logmsg (2, 3, "No actions defined for rule; $rule");
+						}
+		    			logmsg (9, 4, "execrule returning $execruleret");
+			    		delete $rules{$rule} unless $execruleret;
+			 		# TODO: update &actionrule();
+		    		}
+					logmsg (9, 3, "#rules in list .., ".keys(%rules) );
+					logmsg (9, 3, "\%rules ..", \%rules);
+		    		$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} if keys(%rules) == 0;
+		    		# lastline & repeat
+	    		} # rules > 0
+				if (exists( $lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } ) ) {
+					delete ($lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } });
+				}
+				$lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } = %line;
 
-			if ( keys(%rules) == 0) {
-				# Add new unmatched linescode				
+				if ( keys(%rules) == 0) {
+					# Add new unmatched linescode				
+				}
+			} else {
+				logmsg(5, 1, "Not processing rules as text didn't match match regexp: /$MATCH/");
 			}
 			logmsg(9 ,1, "Results hash ...", \%$reshashref );
 			logmsg (5, 1, "finished processing line");
@@ -964,8 +974,15 @@ sub matchrules {
     # returns a list of matching rules
     
     my %rules;
+	logmsg (9, 4, "cfghashref:", $cfghashref);
     for my $rule (keys %{ $cfghashref } ) {
-    $rules{$rule} = $rule if matchfields(\%{ $$cfghashref{$rule}{fields} } , $linehashref);
+		logmsg (9, 4, "Checking to see if $rule applies ...");
+		if (matchfields(\%{ $$cfghashref{$rule}{fields} } , $linehashref)) {
+    		$rules{$rule} = $rule ;
+			logmsg (9, 5, "it matches");
+		} else {
+			logmsg (9, 5, "it doesn't match");
+		}
     }
     
 	return %rules;
@@ -979,13 +996,28 @@ sub matchfields {
 	# Only fail if a field doesn't match.
 	# Passed a cfghashref to a rule
 
+	logmsg (9, 5, "cfghashref:", $cfghashref);
+	if (exists ( $$cfghashref{fields} ) ) {
+		logmsg (9, 5, "cfghashref{fields}:", \%{ $$cfghashref{fields} });
+	}
+	logmsg (9, 5, "linehashref:", $linehashref);
+
 	foreach my $field (keys (%{ $cfghashref } ) ) {
-		if ($$cfghashref{fields}{$field} =~ /^!/) {
-			my $exp = $$cfghashref{fields}{$field};
+		logmsg(9, 6, "checking field: $field");
+		logmsg(9, 7, "value: $$cfghashref{$field}");
+		logmsg (9, 7, "Does field ($field) value - $$linehashref{ $field } match the following regex ...");
+		#if ($$cfghashref{fields}{$field} =~ /^!/) {
+		if ($$cfghashref{$field} =~ /^!/) {
+			#my $exp = $$cfghashref{fields}{$field};
+			my $exp = $$cfghashref{$field};
 			$exp =~ s/^\!//;
 			$ret = 0 unless ($$linehashref{ $field } !~ /$exp/);
+			logmsg (9, 7, "neg regexp compar=/$exp/, ret=$ret");
 		} else {
-			$ret = 0 unless ($$linehashref{ $field } =~ /$$cfghashref{fields}{$field}/);
+			#$ret = 0 unless ($$linehashref{ $field } =~ /$$cfghashref{fields}{$field}/);
+			$ret = 0 unless ($$linehashref{ $field } =~ /$$cfghashref{$field}/);
+			#logmsg (9, 7, "regexp compar=/$$cfghashref{fields}{$field}/, ret=$ret");
+			logmsg (9, 7, "regexp compar=/$$cfghashref{$field}/, ret=$ret");
 		}
 	}
 	return $ret;

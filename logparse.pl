@@ -133,15 +133,21 @@ my $UNMATCHEDLINES = 1;
 my @LOGFILES;
 my %svrlastline; # hash of the last line per server, excluding 'last message repeated x times'
 my $MATCH; # Only lines matching this regex will be parsed
+my $COLOR = 0;
 
 my $result = GetOptions("c|conf=s" => \@CONFIGFILES,
 					"l|log=s" => \@LOGFILES,
 					"d|debug=i" => \$DEBUG,
-					"m|match=s" => \$MATCH
+					"m|match=s" => \$MATCH,
+					"color" => \$COLOR
 		);
 
 unless ($result) {
-	warning ("c", "Usage: logparse.pl -c <config file> -l <log file> [-d <debug level>]\nInvalid  config options passed");
+	warning ("c", "Usage: logparse.pl -c <config file> -l <log file> [-d <debug level>] [--color]\nInvalid  config options passed");
+}
+
+if ($COLOR) {
+	use Term::ANSIColor qw(:constants);
 }
 
 @CONFIGFILES = split(/,/,join(',',@CONFIGFILES));
@@ -612,7 +618,11 @@ sub report {
 			print "\t$line";
 		}
 	}
-	print "\n\nSummaries:\n";
+	if ($COLOR) {
+		print RED "\n\nSummaries:\n", RESET;
+	} else {
+		print "\n\nSummaries:\n";
+	}
 	for my $rule (sort keys %{ $$cfghashref{RULE} })  {
 		next if $rule =~ /nomatch/;
 		
@@ -622,7 +632,11 @@ sub report {
 				logmsg (4, 1, "Rule[rptid]: $rule\[$rptid\]");
 				logmsg (5, 2, "\%ruleresults ... ", \%ruleresults);
 				if (exists ($$cfghashref{RULE}{$rule}{reports}[$rptid]{title} ) ) {
-					print "$$cfghashref{RULE}{$rule}{reports}[$rptid]{title}\n";
+					if ($COLOR) {
+						print BLUE "$$cfghashref{RULE}{$rule}{reports}[$rptid]{title}\n", RESET;
+					} else {
+						print "$$cfghashref{RULE}{$rule}{reports}[$rptid]{title}\n";
+					}
 				} else {
 					logmsg (4, 2, "No title");
 				}
@@ -630,9 +644,17 @@ sub report {
 				for my $key (keys %{$ruleresults{$rptid} }) {
 					logmsg (5, 3, "key:$key");
 					if (exists ($$cfghashref{RULE}{$rule}{reports}[$rptid]{line})) {
-						print rptline(\% {$$cfghashref{RULE}{$rule}{reports}[$rptid] }, \%{$ruleresults{$rptid} }, $rule, $rptid, $key);
+						if ($COLOR) {
+							print GREEN rptline(\% {$$cfghashref{RULE}{$rule}{reports}[$rptid] }, \%{$ruleresults{$rptid} }, $rule, $rptid, $key), RESET;
+						} else {
+							print rptline(\% {$$cfghashref{RULE}{$rule}{reports}[$rptid] }, \%{$ruleresults{$rptid} }, $rule, $rptid, $key);
+						}
 					} else {
-						print "\t$$reshashref{$rule}{$key}: $key\n";
+						if ($COLOR) {
+							print GREEN "\t$$reshashref{$rule}{$key}: $key\n", RESET;
+						} else {
+							print "\t$$reshashref{$rule}{$key}: $key\n";
+						}
 					}
 				}
 				print "\n";	
@@ -1048,9 +1070,10 @@ sub logmsg {
         for my $i (0..$indent) {
             print STDERR "  ";
         }
-        print STDERR whowasi."(): $time: $msg";
+        print STDERR GREEN whowasi."(): $time:", RESET;
+		print STDERR " $msg";
 		if ($dumpvar) {
-			print STDERR Dumper($dumpvar);
+			print STDERR BLUE Dumper($dumpvar), RESET;
 		}
 		print STDERR "\n";
     }
@@ -1062,11 +1085,23 @@ sub warning {
 
     for ($level) {
     	if (/w|warning/i) {
-    		print "WARNING: $msg\n";
+    		if ($COLOR >= 1) {
+				print RED, "WARNING: $msg\n", RESET;
+			} else {
+    			print "WARNING: $msg\n";
+			}
     	} elsif (/e|error/i)  {
-    		print "ERROR: $msg\n";
+			if ($COLOR >= 1) {
+    			print RED, "ERROR: $msg\n", RESET;
+			} else {
+    			print "ERROR: $msg\n";
+			}
     	} elsif (/c|critical/i) {
-    		print "CRITICAL error, aborted ... $msg\n";
+			if ($COLOR >= 1) {
+    			print RED, "CRITICAL error, aborted ... $msg\n", RESET;
+			} else {
+				print "CRITICAL error, aborted ... $msg\n";
+			}
     		exit 1;
     	} else {
     		warning("warning", "No warning message level set");

@@ -768,20 +768,30 @@ sub getmatchlist {
 	my $numericonly = shift;
 	
 	my @matrix = split (/,/, $matchlist);
+
+	logmsg (9, 5, "Matchlist ... $matchlist");
+	logmsg (9, 5, "Matchlist has morphed in \@matrix with elements ... ", \@matrix);
     if ($matchlist !~ /,/) {
     	push @matrix, $matchlist;
+		logmsg (9, 6, "\$matchlist didn't have a \",\", so we shoved it onto \@matrix. Which is now ... ", \@matrix);
     }
     my @tmpmatrix = ();
     for my $i (0 .. $#matrix) {
+		logmsg (9, 7, "\$i: $i");
     	$matrix[$i] =~ s/\s+//g;
     	if ($matrix[$i] =~ /\d+/) {
     		push @tmpmatrix, $matrix[$i];
-    	}
+			logmsg (9, 8, "element $i ($matrix[$i]) was an integer so we pushed it onto the matrix");
+    	} else {
+			logmsg (9, 8, "element $i ($matrix[$i]) wasn't an integer so we ignored it");
+		}
     }
     
     if ($numericonly) {
+		logmsg (9, 5, "Returning numeric only results ... ", \@tmpmatrix);
     	return @tmpmatrix;
     } else {
+		logmsg (9, 5, "Returning full results ... ", \@matrix);
     	return @matrix;
     }
 }
@@ -794,7 +804,7 @@ sub execaction {
 	my $actionid = shift;
 	my $line = shift; # hash passed by ref, DO NOT mod
 	
-	logmsg (7, 4, "Processing line with rule ${rule}'s action# $actionid");
+	logmsg (7, 4, "Processing line with rule ${rule}'s action# $actionid using matches $$cfghashref{matches}");
 	my @matrix = getmatchlist($$cfghashref{matches}, 0);
 	my @tmpmatrix = getmatchlist($$cfghashref{matches}, 1); 
 

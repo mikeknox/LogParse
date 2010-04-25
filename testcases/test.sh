@@ -3,16 +3,17 @@
 dir="`pwd`/`dirname $0`"
 OUTFILE="/tmp/logparse.test.output"
 DEFAULTARGS=" -l ./test.log -c ./logparse.conf -d 0"
+export LOGPARSE="../../logparse.pl"
 
 cd $dir
 
 for testcasedir in `ls -dF1 * | grep '/$'`
 do
 	cd $dir/$testcasedir
-	if [ -f ./args ] ; then
-		../../logparse.pl `cat ./args` > $OUTFILE
+	if [ -x ./args ] ; then
+		bash ./args > $OUTFILE
 	else
-		../../logparse.pl $DEFAULTARGS > $OUTFILE
+		${LOGPARSE} $DEFAULTARGS > $OUTFILE
 	fi
 	diff -u $OUTFILE ./expected.output
 	if test $? -eq 0 ; then

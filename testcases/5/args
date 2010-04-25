@@ -1,0 +1,2 @@
+${LOGPARSE} -l ./test.log -c ./logparse.conf -d 0 -m '^Nov 15 07:' 
+

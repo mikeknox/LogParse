@@ -1,0 +1,12 @@
+
+
+No match for lines:
+
+
+Summaries:
+pam_unix sessions's opened
+	3 sessions of CRON opened on hostA for root by 0
+
+pam_unix session's closed
+	3 sessions of CRON closed on hostA for root
+

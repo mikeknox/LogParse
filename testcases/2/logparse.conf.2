@@ -8,7 +8,7 @@ RULE {
 
 RULE sudo {
 	APP sudo
-	MSG /.* : .* ; PWD=/
+#	MSG /.* : .* ; PWD=/
 	ACTION MSG /(.*): TTY=(.*) ; PWD=(.*); USER=(.*); COMMAND=(.*)/ {HOST, 1, 4, 5}
 	ACTION MSG /(.*): \(command continued\) / IGNORE
 	REPORT "Sudo usage by cmd/user/host" "{2} ran {4} as {3} on {1}: {x} times" count

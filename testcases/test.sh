@@ -7,7 +7,7 @@ export LOGPARSE="../../logparse.pl"
 
 cd $dir
 
-for testcasedir in `ls -dF1 * | grep '/$'`
+for testcasedir in `ls -dF1 * | grep '/$' | sort -n`
 do
 	cd $dir/$testcasedir
 	if [ -x ./args ] ; then

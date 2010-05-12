@@ -5,10 +5,10 @@ No match for lines:
 
 Summaries:
  [0m[34mpam_unix sessions's opened
- [0m[32m	4 sessions of CRON opened on hostA for root by 0
  [0m[32m	5 sessions of sshd opened on hostA for userx by 0
+ [0m[32m	4 sessions of CRON opened on hostA for root by 0
  [0m
 [34mpam_unix session's closed
- [0m[32m	5 sessions of sshd closed on hostA for userx
  [0m[32m	6 sessions of CRON closed on hostA for root
+ [0m[32m	5 sessions of sshd closed on hostA for userx
  [0m

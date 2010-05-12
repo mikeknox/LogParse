@@ -5,10 +5,10 @@ No match for lines:
 
 Summaries:
 pam_unix sessions's opened
-	4 sessions of CRON opened on hostA for root by 0
-	5 sessions of sshd opened on hostA for userx by 0
+	5 sessions of sshd opened on hostA for userx by uid: 0
+	4 sessions of CRON opened on hostA for root by uid: 0
 
 pam_unix session's closed
-	5 sessions of sshd closed on hostA for userx
 	6 sessions of CRON closed on hostA for root
+	5 sessions of sshd closed on hostA for userx
 

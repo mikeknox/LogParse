@@ -1,0 +1,17 @@
+
+
+No match for lines:
+	Apr 29 14:22:19 dhcp-166 smartd[8607]: Unable to monitor any SMART enabled devices. Try debug (-d) option. Exiting...
+	Apr 29 14:34:30 linux-xui7dhcp-166 smartd[2929]: Unable to monitor any SMART enabled devices. Try debug (-d) option. Exiting...
+	Apr 29 14:44:35 dhcp-166 smartd[2902]: smartd 5.39 2008-10-24 22:33 [x86_64-suse-linux-gnu] (openSUSE RPM) Copyright (C) 2002-8 by Bruce Allen, http://smartmontools.sourceforge.net
+
+
+Summaries:
+SMART
+	1 counts of err code 4 (IEC (SMART) mode page) for /dev/sda on linux-xui7dhcp-166
+	1 counts of err code 4 (IEC (SMART) mode page) for /dev/sdc on linux-xui7dhcp-166
+	1 counts of err code 4 (IEC (SMART) mode page) for /dev/sdb on linux-xui7dhcp-166
+	2 counts of err code 4 (IEC (SMART) mode page) for /dev/sda on dhcp-166
+	1 counts of err code 4 (IEC (SMART) mode page) for /dev/sdb on dhcp-166
+	1 counts of err code 4 (IEC (SMART) mode page) for /dev/sdc on dhcp-166
+

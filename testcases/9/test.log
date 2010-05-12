@@ -1,0 +1,22 @@
+Apr 29 14:22:19 dhcp-166 smartd[8607]: Configuration file /etc/smartd.conf was parsed, found DEVICESCAN, scanning devices
+Apr 29 14:22:19 dhcp-166 smartd[8607]: Device: /dev/sda, opened
+Apr 29 14:22:19 dhcp-166 smartd[8607]: Device: /dev/sda, Bad IEC (SMART) mode page, err=4, skip device
+Apr 29 14:22:19 dhcp-166 smartd[8607]: Device: /dev/sdb, opened
+Apr 29 14:22:19 dhcp-166 smartd[8607]: Device: /dev/sdb, Bad IEC (SMART) mode page, err=4, skip device
+Apr 29 14:22:19 dhcp-166 smartd[8607]: Device: /dev/sdc, opened
+Apr 29 14:22:19 dhcp-166 smartd[8607]: Device: /dev/sdc, Bad IEC (SMART) mode page, err=4, skip device
+Apr 29 14:22:19 dhcp-166 smartd[8607]: Unable to monitor any SMART enabled devices. Try debug (-d) option. Exiting...
+Apr 29 14:34:30 linux-xui7dhcp-166 smartd[2929]: Device: /dev/sda, opened
+Apr 29 14:34:30 linux-xui7dhcp-166 smartd[2929]: Device: /dev/sda, Bad IEC (SMART) mode page, err=4, skip device
+Apr 29 14:34:30 linux-xui7dhcp-166 smartd[2929]: Device: /dev/sdb, opened
+Apr 29 14:34:30 linux-xui7dhcp-166 smartd[2929]: Device: /dev/sdb, Bad IEC (SMART) mode page, err=4, skip device
+Apr 29 14:34:30 linux-xui7dhcp-166 smartd[2929]: Device: /dev/sdc, opened
+Apr 29 14:34:30 linux-xui7dhcp-166 smartd[2929]: Device: /dev/sdc, Bad IEC (SMART) mode page, err=4, skip device
+Apr 29 14:34:30 linux-xui7dhcp-166 smartd[2929]: Unable to monitor any SMART enabled devices. Try debug (-d) option. Exiting...
+Apr 29 14:44:35 dhcp-166 smartd[2902]: smartd 5.39 2008-10-24 22:33 [x86_64-suse-linux-gnu] (openSUSE RPM) Copyright (C) 2002-8 by Bruce Allen, http://smartmontools.sourceforge.net
+Apr 29 14:44:35 dhcp-166 smartd[2902]: Opened configuration file /etc/smartd.conf
+Apr 29 14:44:35 dhcp-166 smartd[2902]: Drive: DEVICESCAN, implied '-a' Directive on line 26 of file /etc/smartd.conf
+Apr 29 14:44:35 dhcp-166 smartd[2902]: Configuration file /etc/smartd.conf was parsed, found DEVICESCAN, scanning devices
+Apr 29 14:44:35 dhcp-166 smartd[2902]: Device: /dev/sda, opened
+Apr 29 14:44:35 dhcp-166 smartd[2902]: Device: /dev/sda, Bad IEC (SMART) mode page, err=4, skip device
+Apr 29 14:44:35 dhcp-166 smartd[2902]: Device: /dev/sdb, opened

@@ -254,16 +254,16 @@ sub processlogfile {
 			#TODO describe matching of multiple fields ie in syslog we want to match regex and also ensure that HOST matches previous previousline
 			# Detect and count repeats
 	    		if (keys %rules >= 0) {
-					logmsg (5, 2, "matched ".keys(%rules)." rules from line $line{line}");
+				logmsg (5, 2, "matched ".keys(%rules)." rules from line $line{line}");
 
-		    	# loop through matching rules and collect data as defined in the ACTIONS section of %config
+		    		# loop through matching rules and collect data as defined in the ACTIONS section of %config
 		    		my $actrule = 0;
-            		my %tmprules = %rules;
+            			my %tmprules = %rules;
 		    		for my $rule (keys %tmprules) {
 		    			logmsg (9, 3, "checking rule: $rule");
 						my $execruleret = 0;
 						if (exists($$cfghashref{RULE}{$rule}{actions} ) ) {
-		    				$execruleret = execrule(\@{ $$cfghashref{RULE}{$rule}{actions} }, $reshashref, $rule, \%line);
+		    					$execruleret = execrule(\@{ $$cfghashref{RULE}{$rule}{actions} }, $reshashref, $rule, \%line);
 						} else {
 							logmsg (2, 3, "No actions defined for rule; $rule");
 						}
@@ -271,8 +271,8 @@ sub processlogfile {
 			    		delete $rules{$rule} unless $execruleret;
 			 		# TODO: update &actionrule();
 		    		}
-					logmsg (9, 3, "#rules in list .., ".keys(%rules) );
-					logmsg (9, 3, "\%rules ..", \%rules);
+				logmsg (9, 3, "#rules in list .., ".keys(%rules) );
+				logmsg (9, 3, "\%rules ..", \%rules);
 		    		$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} if keys(%rules) == 0;
 		    		# lastline & repeat
 	    		} # rules > 0
@@ -313,7 +313,7 @@ lines are whitespace delimited, except when contained within " ", {} or //
 	} else {
 		$line =~ s/#.*$//; # strip anything after #
 		#$line =~ s/{.*?$//; # strip trail {, it was required in old format
-		@A =  $line =~ /(\/.+?\/|\{.+?\}|".+?"|\S+)/g;
+		@A =  $line =~ /(\/.+\/|\{.+?\}|".+?"|\S+)/g;
 # Bug
 # Chops field at /, this is normally correct, except when a string value has a / such as a file path
 # Ignore any escaping of \, i.e \/
@@ -676,15 +676,15 @@ sub summariseresults {
 	# returns a summarised hash
 	
 	my %results;
-    logmsg (9, 5, "cfghashref ...", $cfghashref);
-    logmsg (9, 5, "reshashref ...", $reshashref);
+	logmsg (9, 5, "cfghashref ...", $cfghashref);
+	logmsg (9, 5, "reshashref ...", $reshashref);
 	
 	for my $actionid (keys( %$reshashref ) ) {
-    		logmsg (5, 5, "Processing actionid: $actionid ...");
+    	logmsg (5, 5, "Processing actionid: $actionid ...");
 		for my $key (keys %{ $$reshashref{$actionid} } ) {
 			logmsg (5, 6, "Processing key: $key for actionid: $actionid");
 			(my @values) = split (/:/, $key);
-    		        logmsg (9, 7, "values from key($key) ... @values");
+    		logmsg (9, 7, "values from key($key) ... @values");
 
 			for my $rptid (0 .. $#{ $$cfghashref{reports} }) {
 				logmsg (5, 7, "Processing report ID:  $rptid with key: $key for actionid: $actionid");

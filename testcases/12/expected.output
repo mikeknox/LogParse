@@ -1,0 +1,18 @@
+
+
+No match for lines:
+
+
+Summaries:
+SSH logins by method and source host:
+	1 keyboard-interactive/pam logins to userb@hostA from 192.168.1.20
+	1 publickey logins to userb@hostA from 192.168.1.10
+	1 publickey logins to userb@hostA from 192.168.1.20
+
+SSH logins by source host:
+	2 logins to userb@hostA from 192.168.1.20
+	1 logins to userb@hostA from 192.168.1.10
+
+SSH logins to a host:
+	3 logins to userb@hostA
+

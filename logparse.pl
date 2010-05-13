@@ -228,18 +228,19 @@ sub processlogfile {
 			# Placing line and line componenents into a hash to be passed to actrule, components can then be refered
 			# to in action lines, ie {svr} instead of trying to create regexs to collect individual bits
 			$line{line} = $_;
+			$line{line} =~ s/\s+?$//;
 
     		logmsg(5, 1, "Processing next line");
     		logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");
     		logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
 			#logmsg(5, 1, "skipping as line doesn't match the match regex") and 
 
-    		parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $line{line}, \%line);
+    			parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $line{line}, \%line);
     	
 			logmsg(9, 1, "Checking line: $line{line}");
-			logmsg(9, 2, "Extracted Field contents ...\n", \@{$line{fields}});
+			#logmsg(9, 2, "Extracted Field contents ...\n", \@{$line{fields}});
 		
-			if ($line{line} =~ /$MATCH/) {
+			if (not $MATCH or $line{line} =~ /$MATCH/) {
 				my %rules = matchrules(\%{ $$cfghashref{RULE} }, \%line );
 				logmsg(9, 2, keys (%rules)." matches so far");
 
@@ -619,7 +620,7 @@ sub report {
 	print "\n\nNo match for lines:\n";
 	if (exists ($$reshashref{nomatch}) ) {
 		foreach my $line (@{@$reshashref{nomatch}}) {
-			print "\t$line";
+			print "\t$line\n";
 		}
 	}
 	if ($COLOR) {
@@ -773,7 +774,7 @@ sub rptline {
 	logmsg (7, 3, "cfghash ... ", $cfghashref);
 	logmsg (7, 3, "reshash ... ", $reshashref);
 	my $line = "\t".$$cfghashref{line};
-    logmsg (7, 3, "report line: $line");
+    	logmsg (7, 3, "report line: $line");
   
   	for ($$cfghashref{cmd})  {
     	if (/count/i) {

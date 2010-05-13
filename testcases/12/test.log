@@ -1,0 +1,3 @@
+May 13 06:49:57 hostA sshd[17464]: Accepted publickey for userb from 192.168.1.10 port 63182 ssh2
+May 13 08:57:13 hostA sshd[18367]: Accepted keyboard-interactive/pam for userb from 192.168.1.20 port 6395 ssh2
+May 13 09:14:19 hostA sshd[18525]: Accepted publickey for userb from 192.168.1.20 port 6464 ssh2

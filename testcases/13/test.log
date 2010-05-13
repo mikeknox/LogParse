@@ -1,0 +1,5 @@
+May 13 09:36:12 hostA syslog-ng[10704]: Log statistics; dropped='pipe(/dev/xconsole)=685', dropped='pipe(/dev/tty10)=0', processed='center(queued)=10969', processed='center(received)=3755', processed='destination(newsnotice)=0', processed='destination(acpid)=1', processed='destination(firewall)=0', processed='destination(null)=1', processed='destination(mail)=2', processed='destination(mailinfo)=2', processed='destination(console)=2404', processed='destination(newserr)=0', processed='destination(newscrit)=0', processed='destination(messages)=3751', processed='destination(mailwarn)=0', processed='destination(localmessages)=0', processed='destination(netmgm)=0', processed='destination(mailerr)=0', processed='destination(xconsole)=2404', processed='destination(warn)=2404', processed='source(src)=3755'
+May 13 09:42:13 hostA syslog-ng[10704]: Termination requested via signal, terminating;
+May 13 09:42:13 hostA syslog-ng[10704]: syslog-ng shutting down; version='2.0.9'
+May 13 09:42:14 hostA syslog-ng[18923]: syslog-ng starting up; version='2.0.9'
+May 13 09:46:00 hostB syslog-ng[7200]: syslog-ng starting up; version='2.0.9

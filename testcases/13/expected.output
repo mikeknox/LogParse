@@ -1,0 +1,15 @@
+
+
+No match for lines:
+	May 13 09:42:13 hostA syslog-ng[10704]: Termination requested via signal, terminating;
+
+
+Summaries:
+Syslog-ng started up:
+	Syslog-ng has been started 1 times on HostA
+	Syslog-ng has been started 1 times on HostB
+
+Syslog-ng versions:
+	1 of '2.0.9'
+	1 of '2.0.9
+

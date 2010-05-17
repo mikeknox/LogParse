@@ -205,7 +205,7 @@ sub parselogline {
 			}
 		}
 	}
-	logmsg (9, 4, "line results now ...", $linehashref);
+	logmsg (6, 4, "line results now ...", $linehashref);
 }
 
 sub processlogfile {
@@ -230,9 +230,9 @@ sub processlogfile {
 			$line{line} = $_;
 			$line{line} =~ s/\s+?$//;
 
-    		logmsg(5, 1, "Processing next line");
-    		logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");
-    		logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
+			logmsg(5, 1, "Processing next line");
+			logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");
+			logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
 			#logmsg(5, 1, "skipping as line doesn't match the match regex") and 
 
     			parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $line{line}, \%line);
@@ -276,18 +276,18 @@ sub processlogfile {
 		    		$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} if keys(%rules) == 0;
 		    		# lastline & repeat
 	    		} # rules > 0
-				if (exists( $lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } ) ) {
-					delete ($lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } });
-				}
-				$lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } = %line;
-
-				if ( keys(%rules) == 0) {
-					# Add new unmatched linescode				
-				}
-			} else {
-				logmsg(5, 1, "Not processing rules as text didn't match match regexp: /$MATCH/");
+			if (exists( $lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } ) ) {
+				delete ($lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } });
 			}
-			logmsg(9 ,1, "Results hash ...", \%$reshashref );
+			$lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } = %line;
+
+			if ( keys(%rules) == 0) {
+				# Add new unmatched linescode				
+			}
+		} else {
+			logmsg(5, 1, "Not processing rules as text didn't match match regexp: /$MATCH/");
+		}
+		logmsg(9 ,1, "Results hash ...", \%$reshashref );
 			logmsg (5, 1, "finished processing line");
 		}
 		close LOGFILE;
@@ -680,11 +680,11 @@ sub summariseresults {
 	logmsg (9, 5, "reshashref ...", $reshashref);
 	
 	for my $actionid (keys( %$reshashref ) ) {
-    	logmsg (5, 5, "Processing actionid: $actionid ...");
+ 		logmsg (5, 5, "Processing actionid: $actionid ...");
 		for my $key (keys %{ $$reshashref{$actionid} } ) {
 			logmsg (5, 6, "Processing key: $key for actionid: $actionid");
 			(my @values) = split (/:/, $key);
-    		logmsg (9, 7, "values from key($key) ... @values");
+			logmsg (9, 7, "values from key($key) ... @values");
 
 			for my $rptid (0 .. $#{ $$cfghashref{reports} }) {
 				logmsg (5, 7, "Processing report ID:  $rptid with key: $key for actionid: $actionid");
@@ -703,6 +703,7 @@ sub summariseresults {
 				# Compare max fieldid to number of entries in $key, skip if maxid > $key
 				my $targetmaxfield = array_max(\@targetfieldids);
 				if ($targetmaxfield > ($#values + 1) ) {
+					#warning ("w", "There is a field id in the report line that is greater than the number of items in this line's data set, skipping.");
 					logmsg (2, 5, "There is a field id ($targetmaxfield) in the target key greater than the number of fields ($#values) in the key, skipping");
 					next;
 				}
@@ -872,7 +873,7 @@ sub execaction {
     	logmsg (7, 5, ($#tmpmatrix + 1)." entries for matching, using list @tmpmatrix");
 	}
 	logmsg (9, 6, "rule spec: ", $cfghashref);
-    my $retval = 0;
+    my $retval = 0; # 0 - nomatch 1 - match
    	my $matchid;
    	my @resmatrix = ();
     no strict;
@@ -888,7 +889,10 @@ sub execaction {
 			}
 			$matchid = populatematrix(\@resmatrix, $$cfghashref{matches}, $line);
 			$retval = 1;
-    	}
+    	} else {
+			logmsg(8, 6, "line didn't match negative regex");
+		}
+    	logmsg(6, 5, "matrix for rule ... @matrix & matchid $matchid");
     } else {
     	logmsg(8, 5, "Using regex - $$cfghashref{regex} on field content $$line{ $$cfghashref{field} }");
     	if ($$line{ $$cfghashref{field} } =~ /$$cfghashref{regex}/ ) {
@@ -899,27 +903,30 @@ sub execaction {
 			}
 			$matchid = populatematrix(\@resmatrix, $$cfghashref{matches}, $line);
 			$retval = 1;
-    	}
+    	} else {
+			logmsg(8, 6, "line didn't match regex");
+		}
     	logmsg(6, 5, "matrix for rule ... @matrix & matchid $matchid");
     }
+	logmsg (8, 4, "Regex for action has been applied, processing results now ...");
 	use strict;
 	if ($retval) {
 		if (exists($$cfghashref{cmd} ) ) {
-    	for ($$cfghashref{cmd}) {
-    		logmsg (7, 6, "Processing $$cfghashref{cmd} for $rule [$actionid]");
-    		if (/count/i) {
-    			$$reshashref{$rule}{$actionid}{$matchid}{count}++;		
-    		} elsif (/sum/i) {
-    			$$reshashref{$rule}{$actionid}{$matchid}{total} += $resmatrix[ $$cfghashref{sourcefield} ];
-    			$$reshashref{$rule}{$actionid}{$matchid}{count}++;
-    		} elsif (/append/i) {
-    			
-    		} elsif (/ignore/i) {
-    		} else {
-    			warning ("w", "unrecognised cmd ($$cfghashref{cmd}) in action ($actionid) for rule: $rule");
-    			logmsg(1, 5, "unrecognised cmd ($$cfghashref{cmd}) in action ($actionid) for rule: $rule");
-    		}
-				}
+    		for ($$cfghashref{cmd}) {
+    			logmsg (7, 6, "Processing $$cfghashref{cmd} for $rule [$actionid]");
+    			if (/count/i) {
+    				$$reshashref{$rule}{$actionid}{$matchid}{count}++;		
+    			} elsif (/sum/i) {
+    				$$reshashref{$rule}{$actionid}{$matchid}{total} += $resmatrix[ $$cfghashref{sourcefield} ];
+    				$$reshashref{$rule}{$actionid}{$matchid}{count}++;
+    			} elsif (/append/i) {
+    				
+    			} elsif (/ignore/i) {
+    			} else {
+    				warning ("w", "unrecognised cmd ($$cfghashref{cmd}) in action ($actionid) for rule: $rule");
+    				logmsg(1, 5, "unrecognised cmd ($$cfghashref{cmd}) in action ($actionid) for rule: $rule");
+    			}
+			}
     	} else {
 			logmsg(1, 5, "hmmm, no cmd set for rule ($rule)'s actionid: $actionid. The cfghashref data is .. ", $cfghashref);
 		}
@@ -950,11 +957,10 @@ sub execrule {
     	# actionid needs to recorded in resultsref as well as ruleid
 
 		if (exists($$cfghashref[$actionid])) {
-    	$retval += execaction(\%{ $$cfghashref[$actionid] }, $reshashref, $rule, $actionid, $line ); 	
-	} else 	 {
-		logmsg (6, 3, "\$\$cfghashref[$actionid] doesn't exist, but according to the loop counter it should !! ");
-	}
-
+			$retval += execaction(\%{ $$cfghashref[$actionid] }, $reshashref, $rule, $actionid, $line ); 	
+		} else 	 {
+			logmsg (6, 3, "\$\$cfghashref[$actionid] doesn't exist, but according to the loop counter it should !! ");
+		}
     }
     logmsg (7, 2, "After checking all actions for this rule; \%reshash ...", $reshashref);
     

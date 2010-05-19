@@ -743,9 +743,19 @@ sub summariseresults {
 					$results{$rptid}{$targetkeymatch}{count} += $$reshashref{$actionid}{$key}{count};
 					logmsg (9, 9, "Incremented count for report\[$rptid\]\[$targetkeymatch\] by $$reshashref{$actionid}{$key}{count} so it's now $$reshashref{$actionid}{$key}{count}");
 					$results{$rptid}{$targetkeymatch}{total} += $$reshashref{$actionid}{$key}{total};
-					logmsg (9, 9, "Added $$reshashref{$actionid}{$key}{total} to total for report\[$rptid\]\[$targetkeymatch\], so it's now ... $results{$rptid}{$targetkeymatch}{count}");
+					logmsg (9, 9, "Added $$reshashref{$actionid}{$key}{total} to total for report\[$rptid\]\[$targetkeymatch\], so it's now ... $results{$rptid}{$targetkeymatch}{total}");
 					$results{$rptid}{$targetkeymatch}{avg} = $$reshashref{$actionid}{$key}{total} / $$reshashref{$actionid}{$key}{count};
 					logmsg (9, 9, "Avg for report\[$rptid\]\[$targetkeymatch\] is now $results{$rptid}{$targetkeymatch}{avg}");
+
+					if ($results{$rptid}{$targetkeymatch}{max} < $$reshashref{$actionid}{$key}{max} ) {
+						$results{$rptid}{$targetkeymatch}{max} = $$reshashref{$actionid}{$key}{max};
+						logmsg (9, 9, "Setting $$reshashref{$actionid}{$key}{max} to max for report\[$rptid\]\[$targetkeymatch\], so it's now ... $results{$rptid}{$targetkeymatch}{max}");
+					}
+
+					if ($results{$rptid}{$targetkeymatch}{min} > $$reshashref{$actionid}{$key}{min} ) {
+						$results{$rptid}{$targetkeymatch}{min} = $$reshashref{$actionid}{$key}{min};
+						logmsg (9, 9, "Setting $$reshashref{$actionid}{$key}{max} to max for report\[$rptid\]\[$targetkeymatch\], so it's now ... $results{$rptid}{$targetkeymatch}{max}");
+					}
 				} else {
 					logmsg (9, 8, "$key does not match $targetkeymatch<eol>");
 					logmsg (9, 8, "      key $key<eol>");
@@ -787,6 +797,12 @@ sub rptline {
     	} elsif (/SUM/i) {
      		$line =~ s/\{x\}/$$reshashref{$key}{total}/;
      		logmsg(9, 3, "subsituting {x} with $$reshashref{$key}{total} (total)");
+    	} elsif (/MAX/i) {
+     		$line =~ s/\{x\}/$$reshashref{$key}{max}/;
+     		logmsg(9, 3, "subsituting {x} with $$reshashref{$key}{max} (max)");
+    	} elsif (/MIN/i) {
+     		$line =~ s/\{x\}/$$reshashref{$key}{min}/;
+     		logmsg(9, 3, "subsituting {x} with $$reshashref{$key}{min} (min)");
      	} elsif (/AVG/i) {
         	my $avg = $$reshashref{$key}{total} / $$reshashref{$key}{count};
         	$avg = sprintf ("%.3f", $avg);
@@ -917,13 +933,20 @@ sub execaction {
 		if (exists($$cfghashref{cmd} ) ) {
     		for ($$cfghashref{cmd}) {
     			logmsg (7, 6, "Processing $$cfghashref{cmd} for $rule [$actionid]");
-    			if (/count/i) {
-    				$$reshashref{$rule}{$actionid}{$matchid}{count}++;		
-    			} elsif (/sum/i) {
+    			if (/count|sum|max|min/i) {
     				$$reshashref{$rule}{$actionid}{$matchid}{total} += $resmatrix[ $$cfghashref{sourcefield} ];
     				$$reshashref{$rule}{$actionid}{$matchid}{count}++;
+					if ($$reshashref{$rule}{$actionid}{$matchid}{max} < $resmatrix[ $$cfghashref{sourcefield} ] ) {
+						$$reshashref{$rule}{$actionid}{$matchid}{max} = $resmatrix[ $$cfghashref{sourcefield} ];
+					}
+					if ($$reshashref{$rule}{$actionid}{$matchid}{min} > $resmatrix[ $$cfghashref{sourcefield} ] ) {
+						$$reshashref{$rule}{$actionid}{$matchid}{min} = $resmatrix[ $$cfghashref{sourcefield} ];
+					}
+    			#} elsif (/sum/i) {
+    				#$$reshashref{$rule}{$actionid}{$matchid}{total} += $resmatrix[ $$cfghashref{sourcefield} ];
+    				#$$reshashref{$rule}{$actionid}{$matchid}{count}++;
     			} elsif (/append/i) {
-    				
+    				#
     			} elsif (/ignore/i) {
     			} else {
     				warning ("w", "unrecognised cmd ($$cfghashref{cmd}) in action ($actionid) for rule: $rule");

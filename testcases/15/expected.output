@@ -1,0 +1,21 @@
+
+
+No match for lines:
+
+
+Summaries:
+xntpd resets
+	6 xntpd reset's on hostA
+
+xntpd total time reset 
+	total resets on hostA is: 1.741271s
+
+xntpd max reset time
+	max reset on hostA is: 0.530498s
+
+xntpd min reset time
+	min reset on hostA is: -0.288730s
+
+xntpd average reset time
+	avergae reset on hostA is: 0.290s
+

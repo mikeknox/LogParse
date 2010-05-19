@@ -1,0 +1,6 @@
+May 18 00:21:20 hostA xntpd 1d [daemon.notice] xntpd[260]: [ID 774427 daemon.notice] time reset (step) 0.402684 s
+May 18 21:10:18 hostA xntpd 1d [daemon.notice] xntpd[260]: [ID 774427 daemon.notice] time reset (step) 0.400225 s
+May 18 21:34:49 hostA xntpd 1d [daemon.notice] xntpd[260]: [ID 774427 daemon.notice] time reset (step) 0.425891 s
+May 18 22:07:22 hostA xntpd 1d [daemon.notice] xntpd[260]: [ID 774427 daemon.notice] time reset (step) -0.288730 s
+May 18 23:22:51 hostA xntpd 1d [daemon.notice] xntpd[260]: [ID 774427 daemon.notice] time reset (step) 0.530498 s
+May 18 23:42:37 hostA xntpd 1d [daemon.notice] xntpd[260]: [ID 774427 daemon.notice] time reset (step) 0.270703 s

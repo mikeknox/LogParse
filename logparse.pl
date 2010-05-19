@@ -313,11 +313,7 @@ lines are whitespace delimited, except when contained within " ", {} or //
 	} else {
 		$line =~ s/#.*$//; # strip anything after #
 		#$line =~ s/{.*?$//; # strip trail {, it was required in old format
-		@A =  $line =~ /(\/.+\/|\{.+?\}|".+?"|\S+)/g;
-# Bug
-# Chops field at /, this is normally correct, except when a string value has a / such as a file path
-# Ignore any escaping of \, i.e \/
-
+		@A =  $line =~ /(\/.+\/|\{.+?\}|".+?"|\d+=".+?"|\S+)/g;
 	}
 	for (my $i = 0; $i <= $#A; $i++ ) {
 		logmsg (9, 5, "\$A[$i] is $A[$i]");
@@ -469,6 +465,8 @@ ACTION MSG /(.*): TTY=(.*) ; PWD=(.*); USER=(.*); COMMAND=(.*)/ {HOST, 1, 4, 5} 
 
 	$$actionref[$actionindex]{field} = $$argsref[1];
 	$$actionref[$actionindex]{regex} = $$argsref[2];
+#	$$actionref[$actionindex]{regex} =~ s/\//\/\//g;
+
 	if ($$argsref[3] =~ /ignore/i) {
 		logmsg(5, 6, "cmd is ignore");
 		$$actionref[$actionindex]{cmd} = $$argsref[3];
@@ -528,6 +526,7 @@ REPORT "Sudo Usage" "{2} ran {4} as {3} on {1}: {x} times"
 	if ($$argsref[3] and $$argsref[3] =~ /^\/|\d+/) {
 		logmsg(9,3, "report field regex: $$argsref[3]");
 		($$reportref[$reportindex]{field}, $$reportref[$reportindex]{regex} ) = split (/=/, $$argsref[3], 2);
+		$$reportref[$reportindex]{regex} =~ s/^"//;
 		#$$reportref[$reportindex]{regex} = $$argsref[3];
 	}
 
@@ -729,6 +728,8 @@ sub summariseresults {
 				}
 				$targetkeymatch =~ s/^://;
 
+				$targetkeymatch =~ s/\[/\\\[/g;
+				$targetkeymatch =~ s/\]/\\\]/g;
 				$targetkeymatch =~ s/\(/\\\(/g;
 				$targetkeymatch =~ s/\)/\\\)/g;
 			
@@ -736,6 +737,8 @@ sub summariseresults {
 				if ($key =~ /$targetkeymatch/) {
 					$targetkeymatch =~ s/\\\(/\(/g;
 					$targetkeymatch =~ s/\\\)/\)/g;
+					$targetkeymatch =~ s/\\\[/\[/g;
+					$targetkeymatch =~ s/\\\]/\]/g;
 					logmsg (9, 8, "$key does matched $targetkeymatch, so I'm doing the necssary calcs ...");
 					$results{$rptid}{$targetkeymatch}{count} += $$reshashref{$actionid}{$key}{count};
 					logmsg (9, 9, "Incremented count for report\[$rptid\]\[$targetkeymatch\] by $$reshashref{$actionid}{$key}{count} so it's now $$reshashref{$actionid}{$key}{count}");
@@ -894,7 +897,7 @@ sub execaction {
 		}
     	logmsg(6, 5, "matrix for rule ... @matrix & matchid $matchid");
     } else {
-    	logmsg(8, 5, "Using regex - $$cfghashref{regex} on field content $$line{ $$cfghashref{field} }");
+    	logmsg(8, 5, "Using regex /$$cfghashref{regex}/ on field content: $$line{ $$cfghashref{field} }");
     	if ($$line{ $$cfghashref{field} } =~ /$$cfghashref{regex}/ ) {
     		logmsg(8, 6, "line matched regex");
 			for my $val (@tmpmatrix) {
@@ -930,7 +933,9 @@ sub execaction {
     	} else {
 			logmsg(1, 5, "hmmm, no cmd set for rule ($rule)'s actionid: $actionid. The cfghashref data is .. ", $cfghashref);
 		}
-    }	
+    } else {
+		logmsg(5, 5, "retval ($retval) was not set so we haven't processed the results");
+	}
    	logmsg (7, 5, "returning: $retval");
 	return $retval;
 }

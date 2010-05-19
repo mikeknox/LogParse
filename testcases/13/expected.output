@@ -6,10 +6,6 @@ No match for lines:
 
 Summaries:
 Syslog-ng started up:
-	Syslog-ng has been started 1 times on HostA
-	Syslog-ng has been started 1 times on HostB
-
-Syslog-ng versions:
-	1 of '2.0.9'
-	1 of '2.0.9
+	Syslog-ng has been started 1 times on hostA
+	Syslog-ng has been started 1 times on hostB
 

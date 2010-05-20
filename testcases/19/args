@@ -1,0 +1,2 @@
+${LOGPARSE} -c ./logparse.conf.1 -c ./logparse.conf.2 -i ../16/datafile -k 1 -d 0
+

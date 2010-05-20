@@ -141,6 +141,7 @@ my $INPUT; # Where to load %cfghash & %reshash
 # If set, load data and then generate report
 # config files have also been set, update %cfghash and then process ignored lines before generating report
 my $OUTPUT; # Where to save %cfghash & %reshash
+my $KEEPCONFIG = 0; # If > 0, loaded config data is not cleared when using config files
 
 my $result = GetOptions("c|conf=s" => \@CONFIGFILES,
 					"l|log=s" => \@LOGFILES,
@@ -148,11 +149,12 @@ my $result = GetOptions("c|conf=s" => \@CONFIGFILES,
 					"m|match=s" => \$MATCH,
 					"o|outpur=s" => \$OUTPUT,
 					"i|inpur=s" => \$INPUT,
+					"k|keeponfig=i" => \$KEEPCONFIG,
 					"color" => \$COLOR
 		);
 
 unless ($result) {
-	warning ("c", "Usage: logparse.pl -c <config file> -l <log file> [-d <debug level>] [--color] [-m|--match] [-o|--output] [-i|--input]\nInvalid  config options passed");
+	warning ("c", "Usage: logparse.pl -c <config file> -l <log file> [-d <debug level>] [--color] [-m|--match <strinbg>] [-o|--output <file>] [-i|--input <file>] [-k|keepconfig <0|1>] \nInvalid  config options passed");
 }
 
 if ($COLOR) {
@@ -173,7 +175,16 @@ if ($INPUT) {
 } 
 
 my $cfghash = \%{$datahash{cfg}};
-loadcfg ($cfghash, \@CONFIGFILES);
+logmsg (3, 3, "There are ".($#CONFIGFILES+1)." config files specified ...");
+if ($#CONFIGFILES >= 0 ) {
+	if ($INPUT) {
+		$cfghash = {} unless $KEEPCONFIG > 0;
+		logmsg (3, 4, "As config files have been specified, empty loaded config");
+		logmsg (9, 4, "config is now:", $cfghash);
+	}
+	loadcfg ($cfghash, \@CONFIGFILES);
+}
+
 logmsg(7, 3, "cfghash:", $cfghash);
 my $reshash = \%{$datahash{res}};
 
@@ -253,7 +264,8 @@ sub processdatafile {
 			# Placing line and line componenents into a hash to be passed to actrule, components can then be refered
 			# to in action lines, ie {svr} instead of trying to create regexs to collect individual bits
 			$line{line} = $dataline;
-			$line{line} =~ s/\s+?$//;
+			#$line{line} =~ s/\s+?$//;
+			chomp $line{line};
 
 			logmsg(5, 1, "Processing next line");
 			logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");

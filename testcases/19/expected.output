@@ -19,3 +19,16 @@ Sudo usage by user/host
 	usera ran 4 sudo cmds on hosta
 	userb ran 5 sudo cmds on hosta
 
+Sudo usage by cmd/user/host
+	userb ran /usr/bin/tail /var/log/auth.log as root on hosta: 2 times
+	userb ran /bin/grep -i ssh /var/log/apache2 /var/log/apparmor /var/log/apt /var/log/aptitude /var/log/aptitude.1.gz /var/log/auth.log /var/log/auth.log.0 /var/log/auth.log.1.gz /var/log/boot /var/log/btmp /var/log/btmp.1 /var/log/ConsoleKit /var/log/daemon.log /var/log/dbconfig-common /var/log/debug /var/log/dist-upgrade /var/log/dmesg /var/log/dmesg.0 /var/log/dmesg.1.gz /var/log/dmesg.2.gz /var/log/dmesg.3.gz /var/log/dmesg.4.gz /var/log/dpkg.log /var/log/dpkg.log.1 /var/log/dpkg.log.2.gz /var/log/exim4 /var/log/faillog /var/log/fsck /var/log/installer /var/log/kern.log /var/log/landscape /var/log/lastlog /var/log/lpr.log /var/log/mail.err /var/log/mail.info /var/log/mail.log /var/log/mail.warn /var/log/messages /var/log/mysql /var/log/mysql.err /var/log/mysql.log /var/log/mysql.log.1.gz /var/log/news /var/log/pycentral.log /var/log/request-tracker3.6 /var/log/syslog /var/log/syslog as root on hosta: 1 times
+	usera ran /bin/grep ssh /var/log/syslog as root on hosta: 2 times
+	userb ran /bin/grep -i ssh /var/log/messages as root on hosta: 1 times
+	usera ran /bin/chown usera auth.log as root on hosta: 1 times
+	usera ran /bin/grep ssh /var/log/messages as root on hosta: 1 times
+	userb ran /usr/bin/head /var/log/auth.log as root on hosta: 1 times
+
+Sudo usage by user/host
+	usera ran 4 sudo cmds on hosta
+	userb ran 5 sudo cmds on hosta
+

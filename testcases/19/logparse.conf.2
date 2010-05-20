@@ -1,0 +1,25 @@
+RULE {
+	MSG /^message repeated (.*) times/ OR /^message repeated$/
+	
+	ACTION MSG /^message repeated (.*) times/ {1} sum {1} append LASTLINE
+	# Apply {1} as {x} in the previously applied rule for HOST
+	ACTION MSG /^message repeated$/ count append LASTLINE
+}
+
+RULE sudo {
+	APP sudo
+	MSG /.* : .* ; PWD=/
+	ACTION MSG /(.*): TTY=(.*) ; PWD=(.*); USER=(.*); COMMAND=(.*)/ {HOST, 1, 4, 5}
+	ACTION MSG /(.*): \(command continued\) / IGNORE
+	REPORT "Sudo usage by cmd/user/host" "{2} ran {4} as {3} on {1}: {x} times" count
+	REPORT "Sudo usage by user/host" "{2} ran {x} sudo cmds on {1}" count
+	# by default {x} is total
+}
+
+RULE sudo-ignore {
+	APP sudo
+	MSG /\(command continued\)/
+	ACTION MSG /.* : \(command continued\)/ IGNORE
+}
+#######################
+#2

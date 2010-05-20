@@ -118,6 +118,7 @@ ACTION <field> </regex/> <{matches}> append <rule> <{field transformation}> [LAS
 use strict;
 use Getopt::Long;
 use Data::Dumper qw(Dumper);
+use Storable;
 
 # Globals
 #
@@ -127,23 +128,31 @@ my $DEBUG = 0;
 my %DEFAULTS = ("CONFIGFILE", "logparse.conf", "SYSLOGFILE", "/var/log/messages" );
 my %opts;
 my @CONFIGFILES;# = ("logparse.conf");
-my %cfghash;
-my %reshash;
+my %datahash;
+
+#my %cfghash;
+#my %reshash;
 my $UNMATCHEDLINES = 1;
 my @LOGFILES;
 my %svrlastline; # hash of the last line per server, excluding 'last message repeated x times'
 my $MATCH; # Only lines matching this regex will be parsed
 my $COLOR = 0;
+my $INPUT; # Where to load %cfghash & %reshash
+# If set, load data and then generate report
+# config files have also been set, update %cfghash and then process ignored lines before generating report
+my $OUTPUT; # Where to save %cfghash & %reshash
 
 my $result = GetOptions("c|conf=s" => \@CONFIGFILES,
 					"l|log=s" => \@LOGFILES,
 					"d|debug=i" => \$DEBUG,
 					"m|match=s" => \$MATCH,
+					"o|outpur=s" => \$OUTPUT,
+					"i|inpur=s" => \$INPUT,
 					"color" => \$COLOR
 		);
 
 unless ($result) {
-	warning ("c", "Usage: logparse.pl -c <config file> -l <log file> [-d <debug level>] [--color]\nInvalid  config options passed");
+	warning ("c", "Usage: logparse.pl -c <config file> -l <log file> [-d <debug level>] [--color] [-m|--match] [-o|--output] [-i|--input]\nInvalid  config options passed");
 }
 
 if ($COLOR) {
@@ -158,14 +167,32 @@ if ($MATCH) {
 	logmsg (2, 3, "Skipping lines which match $MATCH");
 }
 
-loadcfg (\%cfghash, \@CONFIGFILES);
-logmsg(7, 3, "cfghash:", \%cfghash);
-processlogfile(\%cfghash, \%reshash, \@LOGFILES);
-logmsg (9, 0, "reshash ..\n", %reshash);
-report(\%cfghash, \%reshash);
+if ($INPUT) {
+	logmsg (1, 2, "Loading data from $INPUT");
+	%datahash = %{ retrieve ($INPUT) } or die "Unable to load data  from $INPUT";
+} 
 
-logmsg (9, 0, "reshash ..\n", %reshash);
-logmsg (9, 0, "cfghash ..\n", %cfghash);
+my $cfghash = \%{$datahash{cfg}};
+loadcfg ($cfghash, \@CONFIGFILES);
+logmsg(7, 3, "cfghash:", $cfghash);
+my $reshash = \%{$datahash{res}};
+
+if ($INPUT) {
+	processdatafile($cfghash, $reshash);
+} else {
+	processlogfile($cfghash, $reshash, \@LOGFILES);
+}
+
+if ($OUTPUT) {
+	logmsg (1, 2, "Saving data in $OUTPUT");
+	store (\%datahash, $OUTPUT ) or die "Can't output data to $OUTPUT";
+}
+
+logmsg (9, 0, "reshash ..\n", $reshash);
+report($cfghash, $reshash);
+
+logmsg (9, 0, "reshash ..\n", $reshash);
+logmsg (9, 0, "cfghash ..\n", $cfghash);
 
 
 exit 0;
@@ -208,6 +235,35 @@ sub parselogline {
 	logmsg (6, 4, "line results now ...", $linehashref);
 }
 
+sub processdatafile {
+	my $cfghashref = shift;
+	my $reshashref = shift;
+
+	my $format = $$cfghashref{FORMAT}{default}; # TODO - make dynamic
+	my %lastline;
+	
+	logmsg(5, 1, " and I was called by ... ".&whowasi);
+	
+	if (exists ($$reshashref{nomatch}) ) {
+		my @nomatch = @{ $$reshashref{nomatch} };
+		@{ $$reshashref{nomatch} } = ();
+		#foreach my $line (@{@$reshashref{nomatch}}) {
+		foreach my $dataline (@nomatch) {
+			my %line;
+			# Placing line and line componenents into a hash to be passed to actrule, components can then be refered
+			# to in action lines, ie {svr} instead of trying to create regexs to collect individual bits
+			$line{line} = $dataline;
+			$line{line} =~ s/\s+?$//;
+
+			logmsg(5, 1, "Processing next line");
+			logmsg(9, 2, "Delimiter: $$cfghashref{FORMAT}{ $format }{fields}{delimiter}");
+			logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
+
+			processline ($cfghashref, $reshashref, \%line, $format, \%lastline);
+		}
+	}
+}
+
 sub processlogfile {
 	my $cfghashref = shift;
 	my $reshashref = shift;
@@ -235,64 +291,73 @@ sub processlogfile {
 			logmsg(9, 2, "totalfields: $$cfghashref{FORMAT}{$format}{fields}{totalfields}");
 			#logmsg(5, 1, "skipping as line doesn't match the match regex") and 
 
-    			parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $line{line}, \%line);
-    	
-			logmsg(9, 1, "Checking line: $line{line}");
-			#logmsg(9, 2, "Extracted Field contents ...\n", \@{$line{fields}});
-		
-			if (not $MATCH or $line{line} =~ /$MATCH/) {
-				my %rules = matchrules(\%{ $$cfghashref{RULE} }, \%line );
-				logmsg(9, 2, keys (%rules)." matches so far");
-
-			#TODO Handle "Message repeated" type scenarios when we don't know which field should contatin the msg
-			#UP to here	
-			# FORMAT stanza contains a substanza which describes repeat for the given format
-			# format{repeat}{cmd} - normally regex, not sure what other solutions would apply
-			# format{repeat}{regex} - array of regex's hashes
-			# format{repeat}{field} - the name of the field to apply the cmd (normally regex) to
-		
-			#TODO describe matching of multiple fields ie in syslog we want to match regex and also ensure that HOST matches previous previousline
-			# Detect and count repeats
-	    		if (keys %rules >= 0) {
-				logmsg (5, 2, "matched ".keys(%rules)." rules from line $line{line}");
-
-		    		# loop through matching rules and collect data as defined in the ACTIONS section of %config
-		    		my $actrule = 0;
-            			my %tmprules = %rules;
-		    		for my $rule (keys %tmprules) {
-		    			logmsg (9, 3, "checking rule: $rule");
-						my $execruleret = 0;
-						if (exists($$cfghashref{RULE}{$rule}{actions} ) ) {
-		    					$execruleret = execrule(\@{ $$cfghashref{RULE}{$rule}{actions} }, $reshashref, $rule, \%line);
-						} else {
-							logmsg (2, 3, "No actions defined for rule; $rule");
-						}
-		    			logmsg (9, 4, "execrule returning $execruleret");
-			    		delete $rules{$rule} unless $execruleret;
-			 		# TODO: update &actionrule();
-		    		}
-				logmsg (9, 3, "#rules in list .., ".keys(%rules) );
-				logmsg (9, 3, "\%rules ..", \%rules);
-		    		$$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $line{line} if keys(%rules) == 0;
-		    		# lastline & repeat
-	    		} # rules > 0
-			if (exists( $lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } ) ) {
-				delete ($lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } });
-			}
-			$lastline{ $line{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } = %line;
-
-			if ( keys(%rules) == 0) {
-				# Add new unmatched linescode				
-			}
-		} else {
-			logmsg(5, 1, "Not processing rules as text didn't match match regexp: /$MATCH/");
-		}
-		logmsg(9 ,1, "Results hash ...", \%$reshashref );
-			logmsg (5, 1, "finished processing line");
+			processline ($cfghashref, $reshashref, \%line, $format, \%lastline);
 		}
 		close LOGFILE;
 		logmsg (1, 0, "Finished processing $logfile.");
 	} # loop through logfiles
+}
+
+sub processline {
+	my $cfghashref = shift;
+	my $reshashref = shift;
+	my $lineref = shift;
+	my $format = shift;
+	my $lastlineref = shift;
+	
+	parselogline(\%{ $$cfghashref{FORMAT}{$format}{fields} }, $$lineref{line}, $lineref);
+    	
+	logmsg(9, 1, "Checking line: $$lineref{line}");
+		
+	if (not $MATCH or $$lineref{line} =~ /$MATCH/) {
+		my %rules = matchrules(\%{ $$cfghashref{RULE} }, $lineref );
+		logmsg(9, 2, keys (%rules)." matches so far");
+
+		#TODO Handle "Message repeated" type scenarios when we don't know which field should contatin the msg
+		#UP to here	
+		# FORMAT stanza contains a substanza which describes repeat for the given format
+		# format{repeat}{cmd} - normally regex, not sure what other solutions would apply
+		# format{repeat}{regex} - array of regex's hashes
+		# format{repeat}{field} - the name of the field to apply the cmd (normally regex) to
+		
+		#TODO describe matching of multiple fields ie in syslog we want to match regex and also ensure that HOST matches previous previousline
+		# Detect and count repeats
+	    if (keys %rules >= 0) {
+			logmsg (5, 2, "matched ".keys(%rules)." rules from line $$lineref{line}");
+
+		    # loop through matching rules and collect data as defined in the ACTIONS section of %config
+		    my $actrule = 0;
+            my %tmprules = %rules;
+		    for my $rule (keys %tmprules) {
+		    	logmsg (9, 3, "checking rule: $rule");
+				my $execruleret = 0;
+				if (exists($$cfghashref{RULE}{$rule}{actions} ) ) {
+		    		$execruleret = execrule(\@{ $$cfghashref{RULE}{$rule}{actions} }, $reshashref, $rule, $lineref);
+				} else {
+					logmsg (2, 3, "No actions defined for rule; $rule");
+				}
+		    	logmsg (9, 4, "execrule returning $execruleret");
+			    delete $rules{$rule} unless $execruleret;
+			 		# TODO: update &actionrule();
+		    }
+			logmsg (9, 3, "#rules in list .., ".keys(%rules) );
+			logmsg (9, 3, "\%rules ..", \%rules);
+		    $$reshashref{nomatch}[$#{$$reshashref{nomatch}}+1] = $$lineref{line} if keys(%rules) == 0;
+		    # lastline & repeat
+	    } # rules > 0
+		if (exists( $$lastlineref{ $$lineref{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } ) ) {
+			delete ($$lastlineref{ $$lineref{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } });
+		}
+		$$lastlineref{ $$lineref{ $$cfghashref{FORMAT}{$format}{LASTLINEINDEX} } } = %{ $lineref};
+
+		if ( keys(%rules) == 0) {
+			# Add new unmatched linescode				
+		}
+	} else {
+		logmsg(5, 1, "Not processing rules as text didn't match match regexp: /$MATCH/");
+	}
+	logmsg(9 ,1, "Results hash ...", \%$reshashref );
+	logmsg (5, 1, "finished processing line");
 }
 
 sub getparameter {
@@ -1205,3 +1270,16 @@ sub array_max {
 	return $highestvalue;
 }
 
+sub loaddata {
+	my $datafile = shift;
+	my $datahashref = shift;
+
+	%{$$datahashref} = retrive($datafile);
+}
+
+sub savedata {
+	my $datafile = shift;
+	my $datahashref = shift;
+
+	store ($datahashref, $datafile) or die "Can't output data to $datafile";
+}

@@ -388,8 +388,8 @@ lines are whitespace delimited, except when contained within " ", {} or //
 	} elsif ($line =~ /^\s+$/ or $line =~ /^$/ ){
 		logmsg(9, 4, "empty line, skipping, therefore returns are empty strings");
 	} else {
-		$line =~ s/#.*$//; # strip anything after #
-		#$line =~ s/{.*?$//; # strip trail {, it was required in old format
+		$line =~ s/(?<!\\)#.*$//; # strip anything after #, unless it is precceded by \
+		logmsg(9, 4, "line after removing training comments: $line");
 		@A =  $line =~ /(\/.+\/|\{.+?\}|".+?"|\d+=".+?"|\S+)/g;
 	}
 	for (my $i = 0; $i <= $#A; $i++ ) {
@@ -402,38 +402,6 @@ lines are whitespace delimited, except when contained within " ", {} or //
 	logmsg (9, 5, "returning @A");
 	return @A;
 }
-
-=depricate
-sub parsecfgline {
-=head6 parsecfgline($line)
-Depricated, use getparameter()
-takes line as arg, and returns array of cmd and value (arg)
-#=cut
-	my $line = shift;
-
-	logmsg (5, 3, " and I was called by ... ".&whowasi);
-	my $cmd = "";
-	my $arg = "";
-	chomp $line;
-
-	logmsg(5, 3, " and I was called by ... ".&whowasi);
-	logmsg (6, 4, "line: ${line}");
-
-	if ($line =~ /^#|^\s+#/ ) {
-		logmsg(9, 4, "comment line, skipping, therefore returns are empty strings");
-	} elsif ($line =~ /^\s+$/ or $line =~ /^$/ ){
-		logmsg(9, 4, "empty line, skipping, therefore returns are empty strings");
-	} else {
-		$line = $1 if $line =~ /^\s+(.*)/;
-		($cmd, $arg) = split (/\s+/, $line, 2);
-		$arg = "" unless $arg;
-		$cmd = "" unless $cmd;	
-	}
-	
-	logmsg (6, 3, "returning cmd: $cmd arg: $arg");
-	return ($cmd, $arg);
-}
-=cut
 
 sub loadcfg {
 =head6 loadcfg(<cfghashref>, <cfgfile name>)
@@ -809,6 +777,7 @@ sub summariseresults {
 				$targetkeymatch =~ s/\]/\\\]/g;
 				$targetkeymatch =~ s/\(/\\\(/g;
 				$targetkeymatch =~ s/\)/\\\)/g;
+				$targetkeymatch =~ s/(?<!\.\*)\?/\\\?/g;
 			
 				logmsg (9, 7, "targetkey is $targetkeymatch");
 				if ($key =~ /$targetkeymatch/) {
@@ -816,6 +785,8 @@ sub summariseresults {
 					$targetkeymatch =~ s/\\\)/\)/g;
 					$targetkeymatch =~ s/\\\[/\[/g;
 					$targetkeymatch =~ s/\\\]/\]/g;
+					$targetkeymatch =~ s/\\\?/\?/g;
+
 					logmsg (9, 8, "$key does matched $targetkeymatch, so I'm doing the necssary calcs ...");
 					$results{$rptid}{$targetkeymatch}{count} += $$reshashref{$actionid}{$key}{count};
 					logmsg (9, 9, "Incremented count for report\[$rptid\]\[$targetkeymatch\] by $$reshashref{$actionid}{$key}{count} so it's now $$reshashref{$actionid}{$key}{count}");

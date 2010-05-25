@@ -1,0 +1,12 @@
+
+
+No match for lines:
+	May 24 07:38:08 hosta ipop3d[29316]: Login user=user.a host=someotherhost.someisp.net [192.168.23.10] nmsgs=57/57
+	May 24 07:38:14 hosta imapd[29329]: imaps SSL service init from 192.168.23.103
+
+
+Summaries:
+IMAP disconnects
+	2 unexpected disconnect(s) for user.b on hosta
+	1 unexpected disconnect(s) for ??? on hosta
+

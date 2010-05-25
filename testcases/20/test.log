@@ -1,0 +1,5 @@
+May 24 07:38:04 hosta imapd[29288]: Unexpected client disconnect, while reading line user=user.b host=somehost.myisp.com [10.1.1.123]
+May 24 07:38:05 hosta imapd[29307]: Unexpected client disconnect, while reading line user=user.b host=somehost.myisp.com [10.1.1.123]
+May 24 07:38:08 hosta ipop3d[29316]: Login user=user.a host=someotherhost.someisp.net [192.168.23.10] nmsgs=57/57
+May 24 07:38:14 hosta imapd[29329]: imaps SSL service init from 192.168.23.103
+May 24 07:38:14 hosta imapd[29329]: Unexpected client disconnect, while reading line user=??? host=host=somehost.myisp.com [10.1.1.123]
